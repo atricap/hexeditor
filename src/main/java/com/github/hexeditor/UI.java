@@ -16,7 +16,7 @@ public class UI extends JApplet {
     private static final String appName = "hexeditor.jar";
     private static final String version = "2025-xx-xx";
     private static boolean isApplet = false;
-    private static final JPanel mainPanel = new JPanel(new BorderLayout());
+    private static final JPanel uiPanel = new JPanel(new BorderLayout());
     private static final Runtime rT = Runtime.getRuntime();
     static final byte[] logo = Base64.getDecoder().decode(
             "R0lGODlhEAAQAIAAAAAAAP///yH5BAEAAAEALAAAAAAQABAAAAIojI+pmwDmGHwhSmsZpppGDk3Ox22j92TbMSKr6KJTVcqqTFeNxPdHAQA7");
@@ -36,7 +36,7 @@ public class UI extends JApplet {
         } catch (Exception ignored) {
         }
 
-        setUpMainPanel(isApplet, false, null);
+        setUpUIPanel(isApplet, false, null);
 
         String javaMinVersion = this.getParameter("JAVAMINVERSION");
         if (System.getProperty("java.specification.version").compareToIgnoreCase(javaMinVersion) < 0) {
@@ -48,7 +48,7 @@ public class UI extends JApplet {
             return;
         }
 
-        this.getContentPane().add(mainPanel, "Center");
+        this.getContentPane().add(uiPanel, "Center");
     }
 
     public static void main(String[] args) {
@@ -102,15 +102,15 @@ public class UI extends JApplet {
         } catch (Exception ignored) {
         }
 
-        setUpMainPanel(isApplet, isSlave, fileName);
+        setUpUIPanel(isApplet, isSlave, fileName);
 
         JFrame.setDefaultLookAndFeelDecorated(true);
-        f.getContentPane().add(mainPanel, "Center");
+        f.getContentPane().add(uiPanel, "Center");
         f.setVisible(true);
     }
 
-    private static void setUpMainPanel(boolean isApplet, boolean isSlave, String fileName) {
-        mainPanel.add(BinPanel.createInstance(isApplet, isSlave, fileName, menuBar -> theRootPane.setJMenuBar(menuBar)));
+    private static void setUpUIPanel(boolean isApplet, boolean isSlave, String fileName) {
+        uiPanel.add(MainPanel.createInstance(isApplet, isSlave, fileName, menuBar -> theRootPane.setJMenuBar(menuBar)));
     }
 
     private static void bugReport() {

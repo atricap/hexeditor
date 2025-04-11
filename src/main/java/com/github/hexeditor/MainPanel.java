@@ -19,13 +19,13 @@ import javax.swing.border.TitledBorder;
 import javax.swing.event.CaretEvent;
 import javax.swing.event.CaretListener;
 
-public class BinPanel extends JPanel
+public class MainPanel extends JPanel
         implements ActionListener, ItemListener, CaretListener, MouseListener {
 
     JTextField fileField = new JTextField();
     JProgressBar savePBar = new JProgressBar(0, 0, 0);
     JProgressBar findPBar = new JProgressBar(0, 0, 0);
-    BinEdit hexV;
+    BinEdit binEdit;
     JComponent help = this.createHelp();
     boolean helpFlag = false;
     boolean cp437Available = false;
@@ -54,11 +54,11 @@ public class BinPanel extends JPanel
     DecimalFormat floatFormat = new DecimalFormat("#.##########E0");
     DecimalFormat doubleFormat = new DecimalFormat("#.###################E0");
 
-    public static BinPanel createInstance(boolean isApplet, boolean isSlave, String fileName, Consumer<JMenuBar> onMenuCreated) {
-        return new BinPanel(isApplet, isSlave, fileName, onMenuCreated);
+    public static MainPanel createInstance(boolean isApplet, boolean isSlave, String fileName, Consumer<JMenuBar> onMenuCreated) {
+        return new MainPanel(isApplet, isSlave, fileName, onMenuCreated);
     }
 
-    public BinPanel(boolean isApplet, boolean isSlave, String fileName, Consumer<JMenuBar> onMenuCreated) {
+    public MainPanel(boolean isApplet, boolean isSlave, String fileName, Consumer<JMenuBar> onMenuCreated) {
         this.isApplet = isApplet;
 
         onMenuCreated.accept(createMenuBar());
@@ -198,8 +198,8 @@ public class BinPanel extends JPanel
         gbc.fill = 1;
         gbc.weighty = 1.0D;
         ++gbc.gridy;
-        this.hexV = new BinEdit(this, this.isApplet);
-        panel.add(this.hexV, gbc);
+        this.binEdit = new BinEdit(this, this.isApplet);
+        panel.add(this.binEdit, gbc);
 
         gbc.fill = 2;
         gbc.weighty = 0.0D;
@@ -211,10 +211,10 @@ public class BinPanel extends JPanel
         if (isSlave) {
             this.slaveThread = new SlaveThread();
             this.slaveThread.setDaemon(true);
-            this.slaveThread.hexV = this.hexV;
+            this.slaveThread.binEdit = this.binEdit;
             this.slaveThread.start();
         } else if (fileName != null) {
-            this.hexV.loadFile(new java.io.File(fileName));
+            this.binEdit.loadFile(new java.io.File(fileName));
         }
 
         return panel;
@@ -425,16 +425,16 @@ public class BinPanel extends JPanel
             this.checkFindEntry();
 
         } else if (event.getSource() == this.findButtons[0] && "Next".equals(this.findButtons[0].getText())) {
-            this.hexV.find1();
+            this.binEdit.find1();
 
         } else if (event.getSource() == this.findButtons[0] && "Stop".equals(this.findButtons[0].getText())) {
-            this.hexV.findThread.interrupt();
+            this.binEdit.findThread.interrupt();
 
         } else if (event.getSource() == this.findButtons[1]) {
             this.findPanel0.removeAll();
             this.validate();
             this.repaint();
-            this.hexV.slideScr(-1L, false);
+            this.binEdit.slideScr(-1L, false);
 
         } else if (event.getSource().getClass().isInstance(new JMenuItem())) {
             JMenuItem menuItem = (JMenuItem) event.getSource();
@@ -453,7 +453,7 @@ public class BinPanel extends JPanel
 
             this.helpFlag = !this.helpFlag && isToggleHelp;
             if (!isToggleHelp) {
-                this.hexV.KeyFromMenu(menuItem.getAccelerator().getKeyCode());
+                this.binEdit.KeyFromMenu(menuItem.getAccelerator().getKeyCode());
             }
         }
     }
@@ -461,7 +461,7 @@ public class BinPanel extends JPanel
     @Override
     public void itemStateChanged(ItemEvent event) {
         if (event.getSource() == this.viewComboBox[0] || event.getSource() == this.viewComboBox[1]) {
-            this.hexV.rePaint();
+            this.binEdit.rePaint();
             return;
         }
         if (event.getSource() == this.findComboBoxes[2]) {
@@ -878,6 +878,6 @@ public class BinPanel extends JPanel
     @Override
     public void mouseClicked(MouseEvent event) {
         this.isHexOffset = !this.isHexOffset;
-        this.hexV.setStatus();
+        this.binEdit.setStatus();
     }
 }

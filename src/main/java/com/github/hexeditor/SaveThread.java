@@ -15,7 +15,7 @@ class SaveThread extends Thread {
     File file1;
     File file2;
     Vector<EdObj> edV;
-    BinEdit hexV;
+    BinEdit binEdit;
     JProgressBar progressBar;
     private long time;
     private long virtualSize;
@@ -104,8 +104,8 @@ class SaveThread extends Thread {
                 }
             }
 
-            if (this.hexV.randomAccessFile != null) {
-                this.hexV.randomAccessFile.close();
+            if (this.binEdit.randomAccessFile != null) {
+                this.binEdit.randomAccessFile.close();
             }
 
             if (this.file1 != null && this.file1.equals(this.file2)) {
@@ -117,11 +117,11 @@ class SaveThread extends Thread {
             }
 
             outFile.renameTo(this.file2);
-            this.hexV.save2(this.file2);
+            this.binEdit.save2(this.file2);
 
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(this.hexV, e);
-            this.hexV.save2(null);
+            JOptionPane.showMessageDialog(this.binEdit, e);
+            this.binEdit.save2(null);
         }
     }
 

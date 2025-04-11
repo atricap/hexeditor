@@ -15,7 +15,7 @@ class FindThread extends Thread {
     long pos;
     byte[] inBytes = null;
     byte[][][] inChars = null;
-    BinEdit hexV;
+    BinEdit binEdit;
     JProgressBar jPBar;
     private boolean isFound = false;
     private int realLength = 0;
@@ -107,7 +107,7 @@ class FindThread extends Thread {
 
         int length = this.ignoreCase ? this.realLength : this.inBytes.length;
         int length2 = this.isFound ? length : 0;
-        this.hexV.find2(this.pos, this.pos - (long) length2);
+        this.binEdit.find2(this.pos, this.pos - (long) length2);
     }
 
     protected void setJPBar() {

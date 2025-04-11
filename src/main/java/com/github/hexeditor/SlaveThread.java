@@ -11,7 +11,7 @@ import javax.swing.Timer;
 
 class SlaveThread extends Thread implements ActionListener {
 
-    BinEdit hexV;
+    BinEdit binEdit;
     Timer timer = new Timer(300, this);
     private final BufferedReader bR;
 
@@ -73,7 +73,7 @@ class SlaveThread extends Thread implements ActionListener {
 
         line = strings.firstElement();
         if (line.equals("-goto") && strings.size() == 2) {
-            this.hexV.goTo(strings.elementAt(1));
+            this.binEdit.goTo(strings.elementAt(1));
         } else if ((line.equals("-Mark")
                         || line.equals("-mark")
                         || line.equals("-delmark")
@@ -82,14 +82,14 @@ class SlaveThread extends Thread implements ActionListener {
             for (j = 1; j < strings.size(); ++j) {
                 try {
                     Long elem = Long.valueOf(strings.elementAt(j));
-                    if (line.equals("-Mark") && !this.hexV.MarkV.contains(elem)) {
-                        this.hexV.MarkV.add(elem);
-                    } else if (line.equals("-mark") && !this.hexV.markV.contains(elem)) {
-                        this.hexV.markV.add(elem);
+                    if (line.equals("-Mark") && !this.binEdit.MarkV.contains(elem)) {
+                        this.binEdit.MarkV.add(elem);
+                    } else if (line.equals("-mark") && !this.binEdit.markV.contains(elem)) {
+                        this.binEdit.markV.add(elem);
                     } else if (line.equals("-delMark")) {
-                        this.hexV.MarkV.remove(elem);
+                        this.binEdit.MarkV.remove(elem);
                     } else if (line.equals("-delmark")) {
-                        this.hexV.markV.remove(elem);
+                        this.binEdit.markV.remove(elem);
                     }
                 } catch (Exception ignored) {
                 }
@@ -116,9 +116,9 @@ class SlaveThread extends Thread implements ActionListener {
                 }
             }
 
-            this.hexV.loadFile(new File(sb.toString()));
+            this.binEdit.loadFile(new File(sb.toString()));
         } else if (line.equals("-close")) {
-            this.hexV.closeFile();
+            this.binEdit.closeFile();
         }
 
         this.timer.restart();

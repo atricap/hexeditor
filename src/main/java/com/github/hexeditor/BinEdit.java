@@ -84,12 +84,12 @@ class BinEdit extends JComponent implements MouseListener, MouseMotionListener, 
     EdObj eObj = null;
     EdObj eObjCtrlY = null;
     File file1 = null;
-    public BinPanel topPanel;
+    public MainPanel mainPanel;
     SaveThread saveThread;
     FindThread findThread;
     long longInput = 0L;
 
-    public BinEdit(BinPanel theBinPanel, boolean isApplet) {
+    public BinEdit(MainPanel mainPanel, boolean isApplet) {
         this.setLayout(new BorderLayout());
         this.add(this.scrollBar, "East");
         this.setGrid(14);
@@ -103,7 +103,7 @@ class BinEdit extends JComponent implements MouseListener, MouseMotionListener, 
         this.scrollBar.addMouseWheelListener(this);
         this.scrollBar.addAdjustmentListener(this);
         this.timer.addActionListener(this);
-        this.topPanel = theBinPanel;
+        this.mainPanel = mainPanel;
         this.isApplet = isApplet;
 
         String[] labels = new String[]{
@@ -161,7 +161,7 @@ class BinEdit extends JComponent implements MouseListener, MouseMotionListener, 
 
     public void loadFile(File f) {
         this.file1 = f;
-        this.topPanel.fileField.setText(
+        this.mainPanel.fileField.setText(
             this.file1.toString() + (this.file1.canWrite() ? "" : " ( ReadOnly ) "));
 
         try {
@@ -617,26 +617,26 @@ class BinEdit extends JComponent implements MouseListener, MouseMotionListener, 
     }
 
     protected void setStatus() {
-        int selectedIndex1 = this.topPanel.viewComboBox[1].getSelectedIndex();
+        int selectedIndex1 = this.mainPanel.viewComboBox[1].getSelectedIndex();
 
         if (this.firstPos != this.lastPos) {
             if (this.lastPos - this.firstPos < 0x7fff_ffffL
                 && this.firstPos - this.lastPos < 0x7fff_ffffL) {
-                this.topPanel.bytesSelectedField.setText(this.lastPos - this.firstPos + " bytes selected.");
+                this.mainPanel.bytesSelectedField.setText(this.lastPos - this.firstPos + " bytes selected.");
             } else {
-                this.topPanel.bytesSelectedField.setForeground(Color.red);
-                this.topPanel.bytesSelectedField.setText("Don't select more than 2^31-1 bytes!");
+                this.mainPanel.bytesSelectedField.setForeground(Color.red);
+                this.mainPanel.bytesSelectedField.setText("Don't select more than 2^31-1 bytes!");
             }
         } else {
             String offsetString = (this.isApplet ? "Offset: " : "<html>Offset:&nbsp;<b>") +
                 this.coloredLong(this.lastPos) +
                 "/-" +
                 this.coloredLong(this.virtualSize - this.lastPos);
-            this.topPanel.bytesSelectedField.setForeground(Color.black);
-            this.topPanel.bytesSelectedField.setText(offsetString);
+            this.mainPanel.bytesSelectedField.setForeground(Color.black);
+            this.mainPanel.bytesSelectedField.setText(offsetString);
         }
 
-        this.topPanel.viewField.setText("");
+        this.mainPanel.viewField.setText("");
         if (this.lastPos >= this.scrPos && this.scrPos + (long) this.srcV.size() >= this.lastPos) {
             if (this.lastPos <= this.virtualSize) {
                 int nBits =
@@ -683,16 +683,16 @@ class BinEdit extends JComponent implements MouseListener, MouseMotionListener, 
                         viewText = String.format("%s / %s", nBits, nBits & 0xff);
 
                     } else if (selectedIndex1 == 8) {
-                        viewText = this.topPanel.floatFormat.format(
+                        viewText = this.mainPanel.floatFormat.format(
                             Float.intBitsToFloat(new BigInteger(bytes).intValue()));
 
                     } else if (selectedIndex1 == 9) {
-                        viewText = this.topPanel.doubleFormat.format(
+                        viewText = this.mainPanel.doubleFormat.format(
                             Double.longBitsToDouble(new BigInteger(bytes).longValue()));
 
                     } else if (selectedIndex1 == 10) {
                         viewText = new String(bytes,
-                            this.topPanel.cp437Available
+                            this.mainPanel.cp437Available
                             ? Charset.forName("cp437")
                             : StandardCharsets.ISO_8859_1);
 
@@ -702,7 +702,7 @@ class BinEdit extends JComponent implements MouseListener, MouseMotionListener, 
 
                     } else if (selectedIndex1 == 12) {
                         viewText = new String(bytes,
-                            this.topPanel.viewComboBox[0].getSelectedIndex() < 1
+                            this.mainPanel.viewComboBox[0].getSelectedIndex() < 1
                             ? StandardCharsets.UTF_16BE
                             : StandardCharsets.UTF_16LE);
 
@@ -713,7 +713,7 @@ class BinEdit extends JComponent implements MouseListener, MouseMotionListener, 
                             9];
                         bytes2[0] = 0;
 
-                        if (this.topPanel.viewComboBox[0].getSelectedIndex() < 1) {
+                        if (this.mainPanel.viewComboBox[0].getSelectedIndex() < 1) {
                             if ((bytes2.length & 1) == 0) {
                                 System.arraycopy(bytes, 0, bytes2, 0, bytes2.length);
                             } else {
@@ -731,14 +731,14 @@ class BinEdit extends JComponent implements MouseListener, MouseMotionListener, 
                     System.err.println("setStatus " + e);
                 }
 
-                this.topPanel.viewField.setText(viewText.replaceAll("[\t\n]", "  "));
-                this.topPanel.viewField.setCaretPosition(0);
+                this.mainPanel.viewField.setText(viewText.replaceAll("[\t\n]", "  "));
+                this.mainPanel.viewField.setCaretPosition(0);
             }
         }
     }
 
     private String coloredLong(long pos) {
-        boolean isHexOffset = this.topPanel.isHexOffset;
+        boolean isHexOffset = this.mainPanel.isHexOffset;
         StringBuilder sb = new StringBuilder(isHexOffset ? "0x" : "");
         String posString = isHexOffset ? Long.toHexString(pos).toUpperCase() : Long.toString(pos);
         int len = posString.length();
@@ -789,7 +789,7 @@ class BinEdit extends JComponent implements MouseListener, MouseMotionListener, 
 
         } else {
             this.InsDelField.setEnabled(true);
-            boolean isHexOffset = this.topPanel.isHexOffset;
+            boolean isHexOffset = this.mainPanel.isHexOffset;
             String offsetString =
                 isHexOffset
                 ? Long.toHexString(this.clipboardSize).toUpperCase()
@@ -1108,7 +1108,7 @@ class BinEdit extends JComponent implements MouseListener, MouseMotionListener, 
                 break;
             case KeyEvent.VK_F:
                 if (this.findThread == null) {
-                    this.topPanel.find();
+                    this.mainPanel.find();
                 }
                 break;
             case KeyEvent.VK_G:
@@ -1525,8 +1525,8 @@ class BinEdit extends JComponent implements MouseListener, MouseMotionListener, 
             this.MarkV.clear();
             this.jSbSource = false;
             this.scrollBar.setValue(0);
-            this.topPanel.fileField.setText("");
-            this.topPanel.findFields[1].setText("");
+            this.mainPanel.fileField.setText("");
+            this.mainPanel.findFields[1].setText("");
             this.setGrid(this.fontSize);
 
         } else {
@@ -1537,12 +1537,12 @@ class BinEdit extends JComponent implements MouseListener, MouseMotionListener, 
             }
 
             if (!this.isApplet) {
-                String text = this.topPanel.fileField.getText();
+                String text = this.mainPanel.fileField.getText();
                 if (text.endsWith(" *")) {
                     text = text.substring(0, text.length() - 2);
                 }
 
-                this.topPanel.fileField.setText(
+                this.mainPanel.fileField.setText(
                     text + (1 < this.undoStack.size() ? " *" : ""));
             }
 
@@ -1760,7 +1760,7 @@ class BinEdit extends JComponent implements MouseListener, MouseMotionListener, 
             return false;
         }
 
-        this.topPanel.saveRunning(true);
+        this.mainPanel.saveRunning(true);
         if (this.saveThread != null) {
             this.saveThread.interrupt();
         }
@@ -1770,8 +1770,8 @@ class BinEdit extends JComponent implements MouseListener, MouseMotionListener, 
         this.saveThread.file1 = this.file1;
         this.saveThread.file2 = jfc.getSelectedFile();
         this.saveThread.edV = this.edV;
-        this.saveThread.hexV = this;
-        this.saveThread.progressBar = this.topPanel.savePBar;
+        this.saveThread.binEdit = this;
+        this.saveThread.progressBar = this.mainPanel.savePBar;
         this.saveThread.start();
 
         return true;
@@ -1780,7 +1780,7 @@ class BinEdit extends JComponent implements MouseListener, MouseMotionListener, 
     protected void save2(File f) {
         if (f != null) {
             this.file1 = new File(f, "");
-            this.topPanel.fileField.setText(
+            this.mainPanel.fileField.setText(
                 this.file1 + (this.file1.canWrite() ? "" : " (ReadOnly)"));
 
             try {
@@ -1794,7 +1794,7 @@ class BinEdit extends JComponent implements MouseListener, MouseMotionListener, 
             this.doVirtual();
         }
 
-        this.topPanel.saveRunning(false);
+        this.mainPanel.saveRunning(false);
         this.saveThread = null;
         this.eObjCtrlY = null;
         this.byteCtrlY = null;
@@ -1802,11 +1802,11 @@ class BinEdit extends JComponent implements MouseListener, MouseMotionListener, 
 
     protected void find1() {
         if (this.virtualSize == 0L
-                || (this.topPanel.finByte == null && this.topPanel.findChar == null)) {
+                || (this.mainPanel.finByte == null && this.mainPanel.findChar == null)) {
             return;
         }
 
-        this.String2long(this.topPanel.findFields[1].getText());
+        this.String2long(this.mainPanel.findFields[1].getText());
         if (this.findThread != null) {
             this.findThread.interrupt();
         }
@@ -1816,7 +1816,7 @@ class BinEdit extends JComponent implements MouseListener, MouseMotionListener, 
         this.findThread.file1 = this.file1;
         this.findThread.edV = this.edV;
         this.findThread.isApplet = this.isApplet;
-        this.findThread.ignoreCase = this.topPanel.useFindChar;
+        this.findThread.ignoreCase = this.mainPanel.useFindChar;
         this.findThread.pos =
             this.longInput < 0L
             ? (this.firstPos == this.lastPos ? this.lastPos : this.lastPos + 1L)
@@ -1825,12 +1825,12 @@ class BinEdit extends JComponent implements MouseListener, MouseMotionListener, 
             : this.virtualSize - 1L == this.longInput
             ? 0L
             : this.longInput + 1L;
-        this.findThread.inBytes = this.topPanel.finByte;
-        this.findThread.inChars = this.topPanel.findChar;
-        this.findThread.wordSize = 1 << this.topPanel.findComboBoxes[3].getSelectedIndex();
-        this.findThread.hexV = this;
-        this.findThread.jPBar = this.topPanel.findPBar;
-        this.topPanel.findRunning(true);
+        this.findThread.inBytes = this.mainPanel.finByte;
+        this.findThread.inChars = this.mainPanel.findChar;
+        this.findThread.wordSize = 1 << this.mainPanel.findComboBoxes[3].getSelectedIndex();
+        this.findThread.binEdit = this;
+        this.findThread.jPBar = this.mainPanel.findPBar;
+        this.mainPanel.findRunning(true);
         this.findThread.start();
     }
 
@@ -1842,8 +1842,8 @@ class BinEdit extends JComponent implements MouseListener, MouseMotionListener, 
             sb.append("0");
         }
 
-        this.topPanel.findRunning(false);
-        this.topPanel.findFields[1].setText(sb.append(hex).toString());
+        this.mainPanel.findRunning(false);
+        this.mainPanel.findFields[1].setText(sb.append(hex).toString());
         this.findThread = null;
         this.lastPos = last;
         this.firstPos = first;
