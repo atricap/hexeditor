@@ -1,14 +1,7 @@
 package com.github.hexeditor;
 
-import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Cursor;
-import java.awt.Font;
-import java.awt.FontMetrics;
-import java.awt.Graphics;
-import java.awt.Toolkit;
+import java.awt.*;
 import java.awt.datatransfer.Clipboard;
-import java.awt.datatransfer.ClipboardOwner;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.ActionEvent;
@@ -28,6 +21,8 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import java.util.Stack;
 import java.util.Vector;
@@ -41,13 +36,8 @@ import javax.swing.JScrollBar;
 import javax.swing.JTextField;
 import javax.swing.Timer;
 
-class binEdit extends JComponent
-        implements MouseListener,
-                MouseMotionListener,
-                MouseWheelListener,
-                KeyListener,
-                ActionListener,
-                AdjustmentListener {
+class binEdit extends JComponent implements MouseListener, MouseMotionListener, MouseWheelListener, KeyListener,
+        ActionListener, AdjustmentListener {
 
     boolean nibArea = true;
     boolean isNibLow = false;
@@ -76,114 +66,113 @@ class binEdit extends JComponent
     long newPos = 0L;
     long clipboardSize;
     long jSBStep = 1L;
-    JFileChooser jFC;
-    JScrollBar jSB = new JScrollBar(1, 0, 1, 0, 1);
-    Object[] InsDelOption = new Object[7];
-    JRadioButton[] InsDelB = new JRadioButton[5];
-    JTextField InsDelTF = new JTextField();
+    JFileChooser fileChooser;
+    JScrollBar scrollBar = new JScrollBar(Adjustable.VERTICAL, 0, 1, 0, 1);
+    Object[] InsDelOptions = new Object[7];
+    JRadioButton[] InsDelRadioButtons = new JRadioButton[5];
+    JTextField InsDelField = new JTextField();
     Timer timer = new Timer(500, this);
     Clipboard clipboard;
-    RandomAccessFile rAF;
-    Stack undoStack = new Stack();
-    Vector srcV = new Vector();
-    Vector markV = new Vector();
-    Vector MarkV = new Vector();
-    Vector v1 = new Vector();
-    Vector XCV = new Vector();
+    RandomAccessFile randomAccessFile;
+    Stack<edObj> undoStack = new Stack<>();
+    Vector<byte[]> srcV = new Vector<>();
+    Vector<Long> markV = new Vector<>();
+    Vector<Long> MarkV = new Vector<>();
+    Vector<edObj> edV = new Vector<>();
+    Vector<byte[]> copyPasteV = new Vector<>();
     Byte byteCtrlY = null;
     edObj eObj = null;
     edObj eObjCtrlY = null;
-    File f1 = null;
+    File file1 = null;
     public binPanel topPanel;
-    saveT sav;
-    findT find;
+    saveT saveThread;
+    findT findThread;
     long longInput = 0L;
 
-    public binEdit(binPanel var1, boolean var2) {
+    public binEdit(binPanel theBinPanel, boolean isApplet) {
         this.setLayout(new BorderLayout());
-        this.add(this.jSB, "East");
+        this.add(this.scrollBar, "East");
         this.setGrid(14);
         this.addMouseListener(this);
         this.addMouseMotionListener(this);
         this.addMouseWheelListener(this);
         this.addKeyListener(this);
-        this.jSB.setEnabled(true);
-        this.jSB.setFocusable(true);
-        this.jSB.setUnitIncrement(1);
-        this.jSB.addMouseWheelListener(this);
-        this.jSB.addAdjustmentListener(this);
+        this.scrollBar.setEnabled(true);
+        this.scrollBar.setFocusable(true);
+        this.scrollBar.setUnitIncrement(1);
+        this.scrollBar.addMouseWheelListener(this);
+        this.scrollBar.addAdjustmentListener(this);
         this.timer.addActionListener(this);
-        this.topPanel = var1;
-        this.isApplet = var2;
-        String[] var3 =
-                new String[] {
-                    "Delete",
-                    "Insert & fill with 0x00",
-                    "Insert & fill with 0xFF",
-                    "Insert & fill with 0x20 (space)",
-                    "or Insert clipboard"
-                };
-        ButtonGroup var4 = new ButtonGroup();
+        this.topPanel = theBinPanel;
+        this.isApplet = isApplet;
 
-        for (int var5 = 0; var5 < this.InsDelB.length; ++var5) {
-            (this.InsDelB[var5] = new JRadioButton(var3[var5])).addActionListener(this);
-            var4.add(this.InsDelB[var5]);
-            this.InsDelOption[var5 < 4 ? var5 : 6] = this.InsDelB[var5];
+        String[] labels = new String[]{
+            "Delete",
+            "Insert & fill with 0x00",
+            "Insert & fill with 0xFF",
+            "Insert & fill with 0x20 (space)",
+            "or Insert clipboard"
+        };
+        ButtonGroup buttonGroup = new ButtonGroup();
+        for (int i = 0; i < this.InsDelRadioButtons.length; ++i) {
+            JRadioButton button = this.InsDelRadioButtons[i] = new JRadioButton(labels[i]);
+            button.addActionListener(this);
+            buttonGroup.add(button);
+            this.InsDelOptions[i < 4 ? i : 6] = button;
         }
+        this.InsDelOptions[4] = "<html>Bytes to delete or to insert<br>(0x.. for hexa entry):";
+        this.InsDelField.setColumns(9);
+        this.InsDelOptions[5] = this.InsDelField;
 
-        this.InsDelOption[4] = "<html>Bytes to delete or to insert<br>(0x.. for hexa entry):";
-        this.InsDelTF.setColumns(9);
-        this.InsDelOption[5] = this.InsDelTF;
-        if (!var2) {
-            this.jFC = new JFileChooser(System.getProperty("user.dir"));
-            this.jFC.setAcceptAllFileFilterUsed(false);
-            JFileChooser var10001 = this.jFC;
-            this.jFC.setDialogType(0);
-            var10001 = this.jFC;
-            this.jFC.setFileSelectionMode(2);
-            this.jFC.setMultiSelectionEnabled(false);
-            this.jFC.setDragEnabled(false);
+        if (!isApplet) {
+            this.fileChooser = new JFileChooser(System.getProperty("user.dir"));
+            this.fileChooser.setAcceptAllFileFilterUsed(false);
+            this.fileChooser.setDialogType(JFileChooser.OPEN_DIALOG);
+            this.fileChooser.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
+            this.fileChooser.setMultiSelectionEnabled(false);
+            this.fileChooser.setDragEnabled(false);
             this.clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
         } else {
             this.jSbSource = false;
-            this.jSB.setValue(0);
-            this.pushHObj(
-                    new edObj(0L, 0L, 2),
-                    "\tTry   Hexeditor.jar with this   virtual file.\n  An applet cannot access a real  file nor the    clipboard.\n     The File menu,  Ctrl+X, Ctrl+C, & Ctrl+V are    therefore       inhibited.");
+            this.scrollBar.setValue(0);
+            this.pushHObj(new edObj(0L, 0L, 2),
+                "\tTry   Hexeditor.jar with this   virtual file.\n" +
+                "  An applet cannot access a real  file nor the    clipboard.\n" +
+                "     The File menu,  Ctrl+X, Ctrl+C, & Ctrl+V are    therefore       inhibited.");
         }
 
         this.focus();
     }
 
     public void closeFile() {
-        if (this.rAF != null) {
+        if (this.randomAccessFile != null) {
             try {
-                this.rAF.close();
-            } catch (Exception var2) {
-                System.err.println("Ctrl+OQ " + var2);
+                this.randomAccessFile.close();
+            } catch (Exception e) {
+                System.err.println("Ctrl+OQ " + e);
             }
         }
 
-        this.f1 = null;
+        this.file1 = null;
         this.undoStack.clear();
         this.doVirtual();
         System.gc();
     }
 
-    public void loadFile(File var1) {
-        this.f1 = var1;
-        this.topPanel.JTFile.setText(
-                this.f1.toString() + (this.f1.canWrite() ? "" : " ( ReadOnly ) "));
+    public void loadFile(File f) {
+        this.file1 = f;
+        this.topPanel.fileField.setText(
+            this.file1.toString() + (this.file1.canWrite() ? "" : " ( ReadOnly ) "));
 
         try {
-            this.rAF = new RandomAccessFile(this.f1, this.f1.canWrite() ? "rw" : "r");
+            this.randomAccessFile = new RandomAccessFile(this.file1, this.file1.canWrite() ? "rw" : "r");
             this.jSbSource = false;
-            this.jSB.setValue(0);
-            this.undoStack.push(new edObj(0L, this.f1.length(), 0));
+            this.scrollBar.setValue(0);
+            this.undoStack.push(new edObj(0L, this.file1.length(), 0));
             this.doVirtual();
             this.focus();
-        } catch (Exception var3) {
-            System.err.println("loadFile " + var3);
+        } catch (Exception e) {
+            System.err.println("loadFile " + e);
         }
 
         this.eObjCtrlY = null;
@@ -196,103 +185,102 @@ class binEdit extends JComponent
         }
     }
 
-    private void setGrid(int var1) {
-        byte var3 = 11;
-        byte var4 = 35;
-        int var5 = -3;
-        int var2;
-        if (var1 != this.fontSize) {
-            this.fontSize = var1 < var3 ? var3 : (var4 < var1 ? var4 : var1);
-            FontMetrics var6 =
-                    this.getFontMetrics(
-                            this.font =
-                                    new Font(
-                                            "Monospaced",
-                                            this.fontSize < 27 ? 0 : 1,
-                                            this.fontSize));
-            this.cShift = var6.getWidths();
+    private void setGrid(int fontSize) {
+        final byte minFontSize = 11;
+        final byte maxFontSize = 35;
+        int x = -3;
+
+        if (fontSize != this.fontSize) {
+            this.fontSize = Math.max(minFontSize, Math.min(maxFontSize, fontSize));
+            this.font = new Font(
+                "Monospaced",
+                this.fontSize < 27 ? Font.PLAIN : Font.BOLD,
+                this.fontSize);
+            FontMetrics metrics = this.getFontMetrics(this.font);
+            this.cShift = metrics.getWidths();
             this.wChar = -1;
 
-            for (var2 = 0; var2 < 256; ++var2) {
-                this.wChar =
-                        var2 != 9 && this.cShift[var2] > this.wChar
-                                ? this.cShift[var2]
-                                : this.wChar;
+            for (int i = 0; i < 256; ++i) {
+                if (i != 9) {
+                    this.wChar = Math.max(this.cShift[i], this.wChar);
+                }
             }
 
-            this.wChar =
-                    var6.charWidth('\u2219') > this.wChar ? var6.charWidth('\u2219') : this.wChar;
+            this.wChar = Math.max(metrics.charWidth('∙'), this.wChar);
 
-            for (var2 = 0; var2 < 256; ++var2) {
-                this.cShift[var2] = this.wChar - this.cShift[var2] >> 1;
+            for (int i = 0; i < 256; ++i) {
+                this.cShift[i] = this.wChar - this.cShift[i] >> 1;
             }
 
             this.wChar >>= 1;
-            this.hChar = var6.getHeight();
-            this.hMargin = var6.getLeading() + var6.getAscent();
+            this.hChar = metrics.getHeight();
+            this.hMargin = metrics.getLeading() + metrics.getAscent();
         }
 
         this.maxRow = (this.hPanel - this.hMargin) / this.hChar + 1;
         this.maxPos = (this.maxRow << 4) - 1;
         this.xPos = new int[Long.toHexString(this.virtualSize + 32L).length() + 1 >> 1 << 1];
 
-        for (var2 = this.xPos.length - 1; -1 < var2; --var2) {
-            this.xPos[var2] = var5 += var2 % 2 == 0 ? 2 : 3;
+        for (int i = this.xPos.length - 1; -1 < i; --i) {
+            this.xPos[i] = x += i % 2 == 0 ? 2 : 3;
         }
 
-        for (var2 = 0; var2 < this.xNib.length; ++var2) {
-            int var10003 = (var2 & 1) == 1 ? 2 : ((var2 & 7) == 0 ? 5 : 3);
-            int var10002 = var5 + ((var2 & 1) == 1 ? 2 : ((var2 & 7) == 0 ? 5 : 3));
-            var5 += var10003;
-            this.xNib[var2] = var10002;
+        for (int i = 0; i < this.xNib.length; ++i) {
+            int ax =
+                (i & 1) == 1 ? 2 :
+                (i & 7) == 0 ? 5 :
+                3;
+            x += ax;
+            this.xNib[i] = x;
         }
 
-        var5 += 4;
+        x += 4;
 
-        for (var2 = 0; var2 < this.xTxt.length; ++var2) {
-            var5 += 2;
-            this.xTxt[var2] = var5;
+        for (int i = 0; i < this.xTxt.length; ++i) {
+            x += 2;
+            this.xTxt[i] = x;
         }
 
-        long var8 = (this.virtualSize >> 4) + 2L;
-        if (var8 < 1073741824L) {
+        long v = (this.virtualSize >> 4) + 2L;
+        if (v < 0x4000_0000L) {
             this.jSbSource = false;
-            this.jSB.setMaximum((int) var8);
+            this.scrollBar.setMaximum((int) v);
             this.jSbSource = false;
-            this.jSB.setVisibleAmount(this.maxRow);
+            this.scrollBar.setVisibleAmount(this.maxRow);
             this.jSbSource = false;
-            this.jSB.setBlockIncrement(this.maxRow - 1);
+            this.scrollBar.setBlockIncrement(this.maxRow - 1);
             this.jSBStep = 16L;
         } else {
-            var2 = (int) (var8 >> 30);
+            int i = (int) (v >> 30);
             this.jSbSource = false;
-            this.jSB.setMaximum(1073741824);
+            this.scrollBar.setMaximum(0x4000_0000);
             this.jSbSource = false;
-            this.jSB.setVisibleAmount(1);
+            this.scrollBar.setVisibleAmount(1);
             this.jSbSource = false;
-            this.jSB.setBlockIncrement(1048576);
-            this.jSBStep = (long) var2 << 4;
+            this.scrollBar.setBlockIncrement(0x10_0000);
+            this.jSBStep = (long) i << 4;
         }
     }
 
-    public void adjustmentValueChanged(AdjustmentEvent var1) {
-        if (var1.getSource() == this.jSB && this.jSbSource) {
-            this.slideScr((long) this.jSB.getValue() * this.jSBStep, false);
+    @Override
+    public void adjustmentValueChanged(AdjustmentEvent event) {
+        if (event.getSource() == this.scrollBar && this.jSbSource) {
+            this.slideScr((long) this.scrollBar.getValue() * this.jSBStep, false);
         }
 
         this.jSbSource = true;
     }
 
-    protected void slideScr(long var1, boolean var3) {
+    protected void slideScr(long pos, boolean flag) {
         long var4 =
-                this.virtualSize < 9223372036854775792L
-                        ? this.virtualSize & -16L
-                        : 9223372036854775792L;
-        if (var3 || var1 >= 0L) {
-            if (var3 && (this.lastPos < var1 || var1 < this.lastPos - (long) this.maxPos)) {
-                this.scrPos = this.lastPos - (long) (this.maxPos >> 1) & -16L;
+            this.virtualSize < 0x7fff_ffff_ffff_fff0L
+                ? this.virtualSize & 0xffff_ffff_ffff_fff0L
+                : 0x7fff_ffff_ffff_fff0L;
+        if (flag || pos >= 0L) {
+            if (flag && (this.lastPos < pos || pos < this.lastPos - (long) this.maxPos)) {
+                this.scrPos = this.lastPos - (long) (this.maxPos >> 1) & 0xffff_ffff_ffff_fff0L;
             } else {
-                this.scrPos = var1 & -16L;
+                this.scrPos = pos & 0xffff_ffff_ffff_fff0L;
             }
         }
 
@@ -304,9 +292,9 @@ class binEdit extends JComponent
             this.scrPos = 0L;
         }
 
-        if (this.scrPos != (long) this.jSB.getValue() * this.jSBStep) {
+        if (this.scrPos != (long) this.scrollBar.getValue() * this.jSBStep) {
             this.jSbSource = false;
-            this.jSB.setValue((int) (this.scrPos / this.jSBStep));
+            this.scrollBar.setValue((int) (this.scrPos / this.jSBStep));
         }
 
         this.setSrc();
@@ -315,49 +303,46 @@ class binEdit extends JComponent
         this.timer.restart();
     }
 
-    protected void goTo(String var1) {
-        if (var1 != null) {
-            this.String2long(var1);
-            if (this.longInput < 0L) {
-                this.longInput = this.lastPos;
-            }
-
-            this.firstPos =
-                    this.lastPos =
-                            this.longInput < this.virtualSize ? this.longInput : this.virtualSize;
-            this.isNibLow = false;
-            this.slideScr(0L, true);
+    protected void goTo(String s) {
+        if (s == null) {
+            return;
         }
+
+        this.String2long(s);
+        if (this.longInput < 0L) {
+            this.longInput = this.lastPos;
+        }
+
+        this.firstPos = this.lastPos = Math.min(this.longInput, this.virtualSize);
+        this.isNibLow = false;
+        this.slideScr(0L, true);
     }
 
-    protected void paintComponent(Graphics var1) {
-        this.paintImg(var1, true);
+    @Override
+    protected void paintComponent(Graphics g) {
+        this.paintImg(g, true);
     }
 
-    protected void paintImg(Graphics var1, boolean var2) {
-        char[] var3 =
-                new char[] {
-                    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'
-                };
-        Color[] var4 =
-                new Color[] {
-                    Color.WHITE,
-                    Color.BLACK,
-                    new Color(50, 50, 50, 40),
-                    new Color(50, 50, 50, 80),
-                    Color.GREEN,
-                    Color.RED,
-                    Color.BLUE,
-                    Color.YELLOW,
-                    Color.MAGENTA,
-                    Color.CYAN,
-                    Color.GREEN.darker(),
-                    new Color(0, 0, 0, 0)
-                };
-        byte[] var5 = new byte[2];
-        int[] var10 = new int[2];
-        int[] var11 = new int[2];
-        long var12 = 0L;
+    protected void paintImg(Graphics g, boolean flag) {
+        final char[] var3 = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+        final Color[] colors = {
+            Color.WHITE,
+            Color.BLACK,
+            new Color(50, 50, 50, 40),
+            new Color(50, 50, 50, 80),
+            Color.GREEN,
+            Color.RED,
+            Color.BLUE,
+            Color.YELLOW,
+            Color.MAGENTA,
+            Color.CYAN,
+            Color.GREEN.darker(),
+            new Color(0, 0, 0, 0)
+        };
+        byte[] src = new byte[2];
+        int[] xy1 = new int[2];
+        int[] xy2 = new int[2];
+        long pos2 = 0L;
         if (this.hPanel != this.getHeight()) {
             this.wPanel = this.getWidth();
             this.hPanel = this.getHeight();
@@ -365,264 +350,265 @@ class binEdit extends JComponent
             this.setSrc();
         }
 
-        var1.setColor(var4[this.isOled ? 1 : 0]);
-        var1.fillRect(0, 0, this.getWidth(), this.getHeight());
-        var1.setFont(this.font);
-        var1.setColor(var4[this.isOled ? 7 : 6]);
+        g.setColor(colors[this.isOled ? 1 : 0]);
+        g.fillRect(0, 0, this.getWidth(), this.getHeight());
+        g.setFont(this.font);
+        g.setColor(colors[this.isOled ? 7 : 6]);
         this.hLimit = 0;
 
-        char var6;
-        int var8;
-        int var9;
-        for (var9 = 0; var9 < this.maxRow; ++var9) {
-            var12 = this.scrPos + (long) (var9 << 4);
-            if ((this.virtualSize | 15L) < var12 || var12 < 0L) {
+        char ch;
+        int ii;
+        for (ii = 0; ii < this.maxRow; ++ii) {
+            pos2 = this.scrPos + (long) (ii << 4);
+            if ((this.virtualSize | 0xfL) < pos2 || pos2 < 0L) {
                 break;
             }
 
-            for (var8 = 0; var8 < this.xPos.length; ++var8) {
-                var6 = var3[(int) (var12 & 15L)];
-                var1.drawString(
-                        "" + var6,
-                        this.cShift[var6] + this.wChar * this.xPos[var8],
-                        this.hLimit = this.hMargin + this.hChar * var9);
-                var12 >>= 4;
+            for (int x : this.xPos) {
+                ch = var3[(int) (pos2 & 15L)];
+                this.hLimit = this.hMargin + this.hChar * ii;
+                g.drawString(
+                    "" + ch,
+                    this.cShift[ch] + this.wChar * x,
+                    this.hLimit);
+                pos2 >>= 4;
             }
         }
 
-        if (var12 < 0L) {
-            var1.setColor(var4[5]);
-            var1.drawString(
-                    "-- Limit = 0x7FFFFFFFFFFFFFFE = Long.MAX_VALUE-1 = 2^63-2 = 9223372036854775806 --",
-                    0,
-                    this.hMargin + this.hChar * var9 - 3);
+        if (pos2 < 0L) {
+            g.setColor(colors[5]);
+            g.drawString(
+                "-- Limit = 0x7FFFFFFFFFFFFFFE = Long.MAX_VALUE-1 = 2^63-2 = 9223372036854775806 --",
+                0,
+                this.hMargin + this.hChar * ii - 3);
         }
 
-        var1.setColor(var4[9]);
-        boolean var16 = this.firstPos < this.lastPos;
-        var10 = this.pos2XY(var16 ? this.firstPos : this.lastPos);
-        var11 = this.pos2XY(!var16 ? this.firstPos : this.lastPos);
+        g.setColor(colors[9]);
+        boolean posOrder = this.firstPos < this.lastPos;
+        xy1 = this.pos2XY(posOrder ? this.firstPos : this.lastPos);
+        xy2 = this.pos2XY(!posOrder ? this.firstPos : this.lastPos);
         if (this.lastPos != this.firstPos && this.lastPos >= this.scrPos) {
-            if (var10[1] == var11[1]) {
-                var1.fillRect(
-                        this.wChar * this.xNib[var10[0] * 2] - 2,
-                        this.hChar * var10[1] + 3,
-                        this.wChar * (this.xNib[var11[0] * 2] - this.xNib[var10[0] * 2]),
-                        this.hChar - 4);
-                var1.fillRect(
-                        this.wChar * this.xTxt[var10[0]],
-                        this.hChar * var10[1] + 3,
-                        this.wChar * (this.xTxt[var11[0]] - this.xTxt[var10[0]]),
-                        this.hChar - 4);
-            } else if (var10[1] + 1 == var11[1] && var11[0] == 0) {
-                var1.fillRect(
-                        this.wChar * this.xNib[var10[0] * 2] - 2,
-                        this.hChar * var10[1] + 3,
-                        this.wChar * (this.xNib[31] + 2 - this.xNib[var10[0] * 2]),
-                        this.hChar - 4);
-                var1.fillRect(
-                        this.wChar * this.xTxt[var10[0]],
-                        this.hChar * var10[1] + 3,
-                        this.wChar * (this.xTxt[15] + 2 - this.xTxt[var10[0]]),
-                        this.hChar - 4);
+            if (xy1[1] == xy2[1]) {
+                g.fillRect(
+                    this.wChar * this.xNib[xy1[0] * 2] - 2,
+                    this.hChar * xy1[1] + 3,
+                    this.wChar * (this.xNib[xy2[0] * 2] - this.xNib[xy1[0] * 2]),
+                    this.hChar - 4);
+                g.fillRect(
+                    this.wChar * this.xTxt[xy1[0]],
+                    this.hChar * xy1[1] + 3,
+                    this.wChar * (this.xTxt[xy2[0]] - this.xTxt[xy1[0]]),
+                    this.hChar - 4);
+            } else if (xy1[1] + 1 == xy2[1] && xy2[0] == 0) {
+                g.fillRect(
+                    this.wChar * this.xNib[xy1[0] * 2] - 2,
+                    this.hChar * xy1[1] + 3,
+                    this.wChar * (this.xNib[31] + 2 - this.xNib[xy1[0] * 2]),
+                    this.hChar - 4);
+                g.fillRect(
+                    this.wChar * this.xTxt[xy1[0]],
+                    this.hChar * xy1[1] + 3,
+                    this.wChar * (this.xTxt[15] + 2 - this.xTxt[xy1[0]]),
+                    this.hChar - 4);
             } else {
-                var1.fillRect(
-                        this.wChar * this.xNib[var10[0] * 2] - 2,
-                        this.hChar * var10[1] + 3,
-                        this.wChar * (this.xNib[31] + 2 - this.xNib[var10[0] * 2]) + 4,
-                        this.hChar - 4);
-                var1.fillRect(
+                g.fillRect(
+                    this.wChar * this.xNib[xy1[0] * 2] - 2,
+                    this.hChar * xy1[1] + 3,
+                    this.wChar * (this.xNib[31] + 2 - this.xNib[xy1[0] * 2]) + 4,
+                    this.hChar - 4);
+                g.fillRect(
+                    this.wChar * this.xNib[0] - 2,
+                    this.hChar * (xy1[1] + 1) - 1,
+                    this.wChar * (this.xNib[31] + 2 - this.xNib[0]) + 4,
+                    this.hChar * (xy2[1] - xy1[1] - 1) + 4);
+                if (this.xNib[xy2[0] * 2] != this.xNib[0]) {
+                    g.fillRect(
                         this.wChar * this.xNib[0] - 2,
-                        this.hChar * (var10[1] + 1) - 1,
-                        this.wChar * (this.xNib[31] + 2 - this.xNib[0]) + 4,
-                        this.hChar * (var11[1] - var10[1] - 1) + 4);
-                if (this.xNib[var11[0] * 2] != this.xNib[0]) {
-                    var1.fillRect(
-                            this.wChar * this.xNib[0] - 2,
-                            this.hChar * var11[1] + 3,
-                            this.wChar * (this.xNib[var11[0] * 2] - this.xNib[0]),
-                            this.hChar - 4);
+                        this.hChar * xy2[1] + 3,
+                        this.wChar * (this.xNib[xy2[0] * 2] - this.xNib[0]),
+                        this.hChar - 4);
                 }
 
-                var1.fillRect(
-                        this.wChar * this.xTxt[var10[0]],
-                        this.hChar * var10[1] + 3,
-                        this.wChar * (this.xTxt[15] + 2 - this.xTxt[var10[0]]),
-                        this.hChar - 4);
-                var1.fillRect(
-                        this.wChar * this.xTxt[0],
-                        this.hChar * (var10[1] + 1) - 1,
-                        this.wChar * (this.xTxt[15] + 2 - this.xTxt[0]),
-                        this.hChar * (var11[1] - var10[1] - 1) + 4);
-                var1.fillRect(
-                        this.wChar * this.xTxt[0],
-                        this.hChar * var11[1] + 3,
-                        this.wChar * (this.xTxt[var11[0]] - this.xTxt[0]),
-                        this.hChar - 4);
+                g.fillRect(
+                    this.wChar * this.xTxt[xy1[0]],
+                    this.hChar * xy1[1] + 3,
+                    this.wChar * (this.xTxt[15] + 2 - this.xTxt[xy1[0]]),
+                    this.hChar - 4);
+                g.fillRect(
+                    this.wChar * this.xTxt[0],
+                    this.hChar * (xy1[1] + 1) - 1,
+                    this.wChar * (this.xTxt[15] + 2 - this.xTxt[0]),
+                    this.hChar * (xy2[1] - xy1[1] - 1) + 4);
+                g.fillRect(
+                    this.wChar * this.xTxt[0],
+                    this.hChar * xy2[1] + 3,
+                    this.wChar * (this.xTxt[xy2[0]] - this.xTxt[0]),
+                    this.hChar - 4);
             }
         }
 
         if (this.isOled) {
-            var1.setXORMode(Color.BLACK);
+            g.setXORMode(Color.BLACK);
         }
 
-        for (int var7 = 0; var7 < this.srcV.size() && var7 < this.maxRow << 4; ++var7) {
-            var8 = var7 % 16;
-            var9 = var7 >> 4;
-            var5 = (byte[]) ((byte[]) ((byte[]) this.srcV.get(var7)));
-            var1.setColor(var4[var5[1] != 1 ? 11 : (this.isOled ? 2 : 2)]);
-            var1.fillRect(
-                    this.wChar * this.xNib[var8 * 2] - 2,
-                    this.hChar * var9 + 3,
-                    this.wChar * 5,
-                    this.hChar - 4);
-            var1.fillRect(
-                    this.wChar * this.xTxt[var8],
-                    this.hChar * var9 + 3,
-                    this.wChar * 2,
-                    this.hChar - 4);
-            var1.setColor(var4[2 < var5[1] ? (this.isOled ? 0 : 5) : (this.isOled ? 4 : 1)]);
-            var6 = var3[(255 & var5[0]) >> 4];
-            var1.drawString(
-                    "" + var6,
-                    this.cShift[var6] + this.wChar * this.xNib[var8 * 2],
-                    this.hMargin + this.hChar * var9);
-            var6 = var3[(255 & var5[0]) % 16];
-            var1.drawString(
-                    "" + var6,
-                    this.cShift[var6] + this.wChar * this.xNib[var8 * 2 + 1],
-                    this.hMargin + this.hChar * var9);
-            var6 = (char) (255 & var5[0]);
-            if (Character.isISOControl(var6)) {
-                var1.drawString(
-                        "∙", this.wChar * this.xTxt[var8], this.hMargin + this.hChar * var9);
+        for (int i = 0; i < this.srcV.size() && i < this.maxRow << 4; ++i) {
+            int jj = i % 16;
+            ii = i >> 4;
+            src = this.srcV.get(i);
+            g.setColor(colors[src[1] != 1 ? 11 : (this.isOled ? 2 : 2)]);
+            g.fillRect(
+                this.wChar * this.xNib[jj * 2] - 2,
+                this.hChar * ii + 3,
+                this.wChar * 5,
+                this.hChar - 4);
+            g.fillRect(
+                this.wChar * this.xTxt[jj],
+                this.hChar * ii + 3,
+                this.wChar * 2,
+                this.hChar - 4);
+            g.setColor(colors[2 < src[1] ? (this.isOled ? 0 : 5) : (this.isOled ? 4 : 1)]);
+            ch = var3[(0xff & src[0]) >> 4];
+            g.drawString(
+                "" + ch,
+                this.cShift[ch] + this.wChar * this.xNib[jj * 2],
+                this.hMargin + this.hChar * ii);
+            ch = var3[(0xff & src[0]) % 16];
+            g.drawString(
+                "" + ch,
+                this.cShift[ch] + this.wChar * this.xNib[jj * 2 + 1],
+                this.hMargin + this.hChar * ii);
+            ch = (char) (0xff & src[0]);
+            if (Character.isISOControl(ch)) {
+                g.drawString(
+                    "∙", this.wChar * this.xTxt[jj], this.hMargin + this.hChar * ii);
             } else {
-                var1.drawString(
-                        "" + var6,
-                        this.cShift[var6] + this.wChar * this.xTxt[var8],
-                        this.hMargin + this.hChar * var9);
+                g.drawString(
+                    "" + ch,
+                    this.cShift[ch] + this.wChar * this.xTxt[jj],
+                    this.hMargin + this.hChar * ii);
             }
         }
 
-        var1.setPaintMode();
-        var1.setColor(var4[10]);
-        long var14;
-        Iterator var17;
-        if (this.markV != null && 0 < this.markV.size()) {
-            var17 = this.markV.iterator();
+        g.setPaintMode();
+        g.setColor(colors[10]);
+        if (this.markV != null && !this.markV.isEmpty()) {
+            Iterator<Long> markVIter = this.markV.iterator();
 
-            while (var17.hasNext()) {
-                var14 = ((Long) var17.next()).longValue();
-                if (this.virtualSize <= var14) {
-                    var17.remove();
-                } else if (this.scrPos <= var14 && var14 - (long) this.maxPos <= this.scrPos) {
-                    var10 = this.pos2XY(var14);
-                    var1.fillRect(
-                            this.wChar * (this.xNib[0] - 1),
-                            this.hChar * (var10[1] + 1) - 2,
-                            this.wChar * (this.xNib[var10[0] << 1] - this.xNib[0] + 1) - 2,
-                            1);
-                    var1.fillRect(
-                            this.wChar * this.xNib[var10[0] << 1] - 2,
-                            this.hChar * var10[1] + 3,
-                            1,
-                            this.hChar - 4);
-                    var1.fillRect(
-                            this.wChar * this.xNib[var10[0] << 1] - 2,
-                            this.hChar * var10[1] + 3,
-                            this.wChar * (this.xNib[31] - this.xNib[var10[0] << 1] + 3),
-                            1);
-                    var1.fillRect(
-                            this.wChar * (this.xTxt[0] - 1),
-                            this.hChar * (var10[1] + 1) - 2,
-                            this.wChar * (this.xTxt[var10[0]] - this.xTxt[0] + 1),
-                            1);
-                    var1.fillRect(
-                            this.wChar * this.xTxt[var10[0]] - 1,
-                            this.hChar * var10[1] + 3,
-                            1,
-                            this.hChar - 4);
-                    var1.fillRect(
-                            this.wChar * this.xTxt[var10[0]],
-                            this.hChar * var10[1] + 3,
-                            this.wChar * (this.xTxt[15] - this.xTxt[var10[0]] + 3),
-                            1);
+            while (markVIter.hasNext()) {
+                long mPos = markVIter.next();
+                if (this.virtualSize <= mPos) {
+                    markVIter.remove();
+                } else if (this.scrPos <= mPos && mPos - (long) this.maxPos <= this.scrPos) {
+                    xy1 = this.pos2XY(mPos);
+                    g.fillRect(
+                        this.wChar * (this.xNib[0] - 1),
+                        this.hChar * (xy1[1] + 1) - 2,
+                        this.wChar * (this.xNib[xy1[0] << 1] - this.xNib[0] + 1) - 2,
+                        1);
+                    g.fillRect(
+                        this.wChar * this.xNib[xy1[0] << 1] - 2,
+                        this.hChar * xy1[1] + 3,
+                        1,
+                        this.hChar - 4);
+                    g.fillRect(
+                        this.wChar * this.xNib[xy1[0] << 1] - 2,
+                        this.hChar * xy1[1] + 3,
+                        this.wChar * (this.xNib[31] - this.xNib[xy1[0] << 1] + 3),
+                        1);
+                    g.fillRect(
+                        this.wChar * (this.xTxt[0] - 1),
+                        this.hChar * (xy1[1] + 1) - 2,
+                        this.wChar * (this.xTxt[xy1[0]] - this.xTxt[0] + 1),
+                        1);
+                    g.fillRect(
+                        this.wChar * this.xTxt[xy1[0]] - 1,
+                        this.hChar * xy1[1] + 3,
+                        1,
+                        this.hChar - 4);
+                    g.fillRect(
+                        this.wChar * this.xTxt[xy1[0]],
+                        this.hChar * xy1[1] + 3,
+                        this.wChar * (this.xTxt[15] - this.xTxt[xy1[0]] + 3),
+                        1);
                 }
             }
         }
 
-        if (this.MarkV != null && 0 < this.MarkV.size()) {
-            var17 = this.MarkV.iterator();
+        if (this.MarkV != null && !this.MarkV.isEmpty()) {
+            Iterator<Long> MarkVIter = this.MarkV.iterator();
 
-            while (var17.hasNext()) {
-                var14 = ((Long) var17.next()).longValue();
-                if (this.virtualSize <= var14) {
-                    var17.remove();
-                } else if (this.scrPos <= var14 && var14 - (long) this.maxPos <= this.scrPos) {
-                    var10 = this.pos2XY(var14);
-                    var1.fillRect(
-                            this.wChar * (this.xNib[0] - 1),
-                            this.hChar * (var10[1] + 1) - 2,
-                            this.wChar * (this.xNib[var10[0] << 1] - this.xNib[0] + 1),
-                            2);
-                    var1.fillRect(
-                            this.wChar * this.xNib[var10[0] << 1] - 2,
-                            this.hChar * var10[1] + 3,
-                            2,
-                            this.hChar - 3);
-                    var1.fillRect(
-                            this.wChar * this.xNib[var10[0] << 1] - 2,
-                            this.hChar * var10[1] + 3,
-                            this.wChar * (this.xNib[31] - this.xNib[var10[0] << 1] + 3),
-                            2);
-                    var1.fillRect(
-                            this.wChar * (this.xTxt[0] - 1),
-                            this.hChar * (var10[1] + 1) - 2,
-                            this.wChar * (this.xTxt[var10[0]] - this.xTxt[0] + 1),
-                            2);
-                    var1.fillRect(
-                            this.wChar * this.xTxt[var10[0]] - 1,
-                            this.hChar * var10[1] + 3,
-                            2,
-                            this.hChar - 3);
-                    var1.fillRect(
-                            this.wChar * this.xTxt[var10[0]],
-                            this.hChar * var10[1] + 3,
-                            this.wChar * (this.xTxt[15] - this.xTxt[var10[0]] + 3),
-                            2);
+            while (MarkVIter.hasNext()) {
+                long MPos = MarkVIter.next();
+                if (this.virtualSize <= MPos) {
+                    MarkVIter.remove();
+                } else if (this.scrPos <= MPos && MPos - (long) this.maxPos <= this.scrPos) {
+                    xy1 = this.pos2XY(MPos);
+                    g.fillRect(
+                        this.wChar * (this.xNib[0] - 1),
+                        this.hChar * (xy1[1] + 1) - 2,
+                        this.wChar * (this.xNib[xy1[0] << 1] - this.xNib[0] + 1),
+                        2);
+                    g.fillRect(
+                        this.wChar * this.xNib[xy1[0] << 1] - 2,
+                        this.hChar * xy1[1] + 3,
+                        2,
+                        this.hChar - 3);
+                    g.fillRect(
+                        this.wChar * this.xNib[xy1[0] << 1] - 2,
+                        this.hChar * xy1[1] + 3,
+                        this.wChar * (this.xNib[31] - this.xNib[xy1[0] << 1] + 3),
+                        2);
+                    g.fillRect(
+                        this.wChar * (this.xTxt[0] - 1),
+                        this.hChar * (xy1[1] + 1) - 2,
+                        this.wChar * (this.xTxt[xy1[0]] - this.xTxt[0] + 1),
+                        2);
+                    g.fillRect(
+                        this.wChar * this.xTxt[xy1[0]] - 1,
+                        this.hChar * xy1[1] + 3,
+                        2,
+                        this.hChar - 3);
+                    g.fillRect(
+                        this.wChar * this.xTxt[xy1[0]],
+                        this.hChar * xy1[1] + 3,
+                        this.wChar * (this.xTxt[15] - this.xTxt[xy1[0]] + 3),
+                        2);
                 }
             }
         }
 
         if (this.scrPos <= this.lastPos && this.lastPos - (long) this.maxPos <= this.scrPos) {
-            var1.setColor(var4[8]);
-            var11 = this.pos2XY(this.lastPos);
-            if (this.caretVisible < 2 || !var2) {
-                var1.fillRect(
-                        this.wChar
-                                        * (this.nibArea
-                                                ? this.xNib[
-                                                        (var11[0] << 1) + (this.isNibLow ? 1 : 0)]
-                                                : this.xTxt[var11[0]])
-                                - 1,
-                        this.hChar * var11[1] + 3,
-                        2,
-                        this.hChar - 4);
+            g.setColor(colors[8]);
+            xy2 = this.pos2XY(this.lastPos);
+            if (this.caretVisible < 2 || !flag) {
+                int xx = this.nibArea
+                    ? this.xNib[(xy2[0] << 1) + (this.isNibLow ? 1 : 0)]
+                    : this.xTxt[xy2[0]];
+                g.fillRect(
+                    this.wChar * xx - 1,
+                    this.hChar * xy2[1] + 3,
+                    2,
+                    this.hChar - 4);
             }
 
-            var1.fillRect(
-                    this.wChar * (this.nibArea ? this.xTxt[var11[0]] : this.xNib[var11[0] << 1]),
-                    this.hChar * (var11[1] + 1) - 2,
-                    this.wChar << (this.nibArea ? 1 : 2),
-                    2);
+            int xx = this.nibArea
+                ? this.xTxt[xy2[0]]
+                : this.xNib[xy2[0] << 1];
+            g.fillRect(
+                this.wChar * xx,
+                this.hChar * (xy2[1] + 1) - 2,
+                this.wChar << (this.nibArea ? 1 : 2),
+                2);
         }
     }
 
-    private int[] pos2XY(long var1) {
-        var1 -= this.scrPos;
-        int var3 = var1 < 0L ? 0 : (var1 < (long) (this.maxPos + 1) ? (int) var1 : this.maxPos + 1);
-        int[] var4 = new int[] {var3 % 16, var3 >> 4};
-        return var4;
+    private int[] pos2XY(long pos) {
+        pos -= this.scrPos;
+        int pos2 =
+            pos < 0L ? 0 :
+            pos < (long) (this.maxPos + 1) ? (int) pos :
+            this.maxPos + 1;
+        return new int[]{pos2 % 16, pos2 >> 4};
     }
 
     protected void rePaint() {
@@ -631,210 +617,216 @@ class binEdit extends JComponent
     }
 
     protected void setStatus() {
-        int var3 = this.topPanel.viewCBox[1].getSelectedIndex();
-        String var7 = "";
+        int selectedIndex1 = this.topPanel.viewComboBox[1].getSelectedIndex();
+
         if (this.firstPos != this.lastPos) {
-            if (this.lastPos - this.firstPos < 2147483647L
-                    && this.firstPos - this.lastPos < 2147483647L) {
-                this.topPanel.JTsizes.setText(this.lastPos - this.firstPos + " bytes selected.");
+            if (this.lastPos - this.firstPos < 0x7fff_ffffL
+                && this.firstPos - this.lastPos < 0x7fff_ffffL) {
+                this.topPanel.bytesSelectedField.setText(this.lastPos - this.firstPos + " bytes selected.");
             } else {
-                this.topPanel.JTsizes.setForeground(Color.red);
-                this.topPanel.JTsizes.setText("Don\'t select more than 2^31-1 bytes!");
+                this.topPanel.bytesSelectedField.setForeground(Color.red);
+                this.topPanel.bytesSelectedField.setText("Don't select more than 2^31-1 bytes!");
             }
         } else {
-            StringBuffer var6 =
-                    new StringBuffer(this.isApplet ? "Offset: " : "<html>Offset:&nbsp;<b>");
-            var6.append(this.coloredLong(this.lastPos))
-                    .append("/-")
-                    .append(this.coloredLong(this.virtualSize - this.lastPos));
-            this.topPanel.JTsizes.setForeground(Color.black);
-            this.topPanel.JTsizes.setText(var6.toString());
+            String offsetString = (this.isApplet ? "Offset: " : "<html>Offset:&nbsp;<b>") +
+                this.coloredLong(this.lastPos) +
+                "/-" +
+                this.coloredLong(this.virtualSize - this.lastPos);
+            this.topPanel.bytesSelectedField.setForeground(Color.black);
+            this.topPanel.bytesSelectedField.setText(offsetString);
         }
 
-        this.topPanel.JTView.setText("");
+        this.topPanel.viewField.setText("");
         if (this.lastPos >= this.scrPos && this.scrPos + (long) this.srcV.size() >= this.lastPos) {
             if (this.lastPos <= this.virtualSize) {
-                int var5 =
-                        var3 != 0 && var3 != 1
-                                ? (var3 != 2 && var3 != 3
-                                        ? (var3 != 4 && var3 != 5 && var3 != 8
-                                                ? (var3 != 6 && var3 != 7 && var3 != 9
-                                                        ? (var3 != 10 && var3 != 11 ? 128 : 64)
-                                                        : 8)
-                                                : 4)
-                                        : 2)
-                                : 1;
-                int var4 =
-                        (int)
-                                ((this.virtualSize < this.scrPos + (long) this.srcV.size()
-                                                ? this.virtualSize
-                                                : this.scrPos + (long) this.srcV.size())
-                                        - this.lastPos);
-                if (var4 == 0 || var4 < var5 && var5 < 9) {
+                int nBits =
+                    selectedIndex1 == 0 || selectedIndex1 == 1 ? 1 :
+                    selectedIndex1 == 2 || selectedIndex1 == 3 ? 2 :
+                    selectedIndex1 == 4 || selectedIndex1 == 5 || selectedIndex1 == 8 ? 4 :
+                    selectedIndex1 == 6 || selectedIndex1 == 7 || selectedIndex1 == 9 ? 8 :
+                    selectedIndex1 == 10 || selectedIndex1 == 11 ? 64 :
+                    128;
+                long posCapped = Math.min(this.virtualSize, this.scrPos + (long) this.srcV.size());
+                int posDiff = (int) (posCapped - this.lastPos);
+                if (posDiff == 0 || posDiff < nBits && nBits < 9) {
                     return;
                 }
 
-                var4 = var5 < var4 ? var5 : (var3 != 12 ? var4 : var4 >> 1 << 1);
-                byte[] var1 = new byte[var4];
+                posDiff =
+                    nBits < posDiff ? nBits :
+                    selectedIndex1 != 12 ? posDiff :
+                    posDiff >> 1 << 1;
+                byte[] bytes = new byte[posDiff];
 
-                for (var4 = 0; var4 < var1.length; ++var4) {
-                    var1[var4] =
-                            ((byte[])
-                                            ((byte[])
-                                                    this.srcV.get(
-                                                            (int)
-                                                                    (this.lastPos
-                                                                            - this.scrPos
-                                                                            + (long) var4))))
-                                    [0];
+                for (posDiff = 0; posDiff < bytes.length; ++posDiff) {
+                    int pos = (int) (this.lastPos - this.scrPos + (long) posDiff);
+                    bytes[posDiff] = this.srcV.get(pos)[0];
                 }
 
-                var5 = var1[0];
+                nBits = bytes[0];
 
+                String viewText = "";
                 try {
-                    if (var3 == 0) {
-                        for (var4 = 0; var4 < 8; ++var4) {
-                            var7 = var7 + ((var5 & 128) == 128 ? '1' : '0');
-                            if (var4 == 3) {
-                                var7 = var7 + ' ';
+                    if (selectedIndex1 == 0) {
+                        StringBuilder sb = new StringBuilder(viewText);
+                        for (posDiff = 0; posDiff < 8; ++posDiff) {
+                            sb.append((nBits & 0x80) == 0x80 ? '1' : '0');
+                            if (posDiff == 3) {
+                                sb.append(' ');
                             }
 
-                            var5 <<= 1;
+                            nBits <<= 1;
                         }
-                    } else if (var3 == 1) {
-                        var7 = Integer.toString(var5) + " / " + Integer.toString(var5 & 255);
-                    } else if (var3 == 8) {
-                        var7 =
-                                this.topPanel.fForm.format(
-                                        (double)
-                                                Float.intBitsToFloat(
-                                                        (new BigInteger(var1)).intValue()));
-                    } else if (var3 == 9) {
-                        var7 =
-                                this.topPanel.dForm.format(
-                                        Double.longBitsToDouble(
-                                                (new BigInteger(var1)).longValue()));
-                    } else if (var3 == 10) {
-                        var7 =
-                                new String(
-                                        var1,
-                                        this.topPanel.cp437Available ? "cp437" : "ISO-8859-1");
-                    } else if (var3 == 11) {
-                        var7 = new String(var1, "UTF-8");
-                    } else if (var3 == 12) {
-                        var7 =
-                                new String(
-                                        var1,
-                                        this.topPanel.viewCBox[0].getSelectedIndex() < 1
-                                                ? "UTF-16BE"
-                                                : "UTF-16LE");
+                        viewText = sb.toString();
+
+                    } else if (selectedIndex1 == 1) {
+                        viewText = String.format("%s / %s", nBits, nBits & 0xff);
+
+                    } else if (selectedIndex1 == 8) {
+                        viewText = this.topPanel.floatFormat.format(
+                            Float.intBitsToFloat(new BigInteger(bytes).intValue()));
+
+                    } else if (selectedIndex1 == 9) {
+                        viewText = this.topPanel.doubleFormat.format(
+                            Double.longBitsToDouble(new BigInteger(bytes).longValue()));
+
+                    } else if (selectedIndex1 == 10) {
+                        viewText = new String(bytes,
+                            this.topPanel.cp437Available
+                            ? Charset.forName("cp437")
+                            : StandardCharsets.ISO_8859_1);
+
+                    } else if (selectedIndex1 == 11) {
+                        viewText = new String(bytes,
+                            StandardCharsets.UTF_8);
+
+                    } else if (selectedIndex1 == 12) {
+                        viewText = new String(bytes,
+                            this.topPanel.viewComboBox[0].getSelectedIndex() < 1
+                            ? StandardCharsets.UTF_16BE
+                            : StandardCharsets.UTF_16LE);
+
                     } else {
-                        byte[] var2 = new byte[var3 < 6 ? var3 : (var3 == 6 ? 8 : 9)];
-                        var2[0] = 0;
-                        if (this.topPanel.viewCBox[0].getSelectedIndex() < 1) {
-                            if ((var2.length & 1) == 0) {
-                                System.arraycopy(var1, 0, var2, 0, var2.length);
+                        byte[] bytes2 = new byte[
+                            selectedIndex1 < 6 ? selectedIndex1 :
+                            selectedIndex1 == 6 ? 8 :
+                            9];
+                        bytes2[0] = 0;
+
+                        if (this.topPanel.viewComboBox[0].getSelectedIndex() < 1) {
+                            if ((bytes2.length & 1) == 0) {
+                                System.arraycopy(bytes, 0, bytes2, 0, bytes2.length);
                             } else {
-                                System.arraycopy(var1, 0, var2, 1, var2.length - 1);
+                                System.arraycopy(bytes, 0, bytes2, 1, bytes2.length - 1);
                             }
                         } else {
-                            for (var4 = var2.length & 1; var4 < var2.length; ++var4) {
-                                var2[var4] = var1[var2.length - var4 - 1];
+                            for (posDiff = bytes2.length & 1; posDiff < bytes2.length; ++posDiff) {
+                                bytes2[posDiff] = bytes[bytes2.length - posDiff - 1];
                             }
                         }
 
-                        var7 = (new BigInteger(var2)).toString();
+                        viewText = new BigInteger(bytes2).toString();
                     }
-                } catch (Exception var9) {
-                    System.err.println("setStatus " + var9);
+                } catch (Exception e) {
+                    System.err.println("setStatus " + e);
                 }
 
-                this.topPanel.JTView.setText(var7.replaceAll("\t", "  ").replaceAll("\n", "  "));
-                this.topPanel.JTView.setCaretPosition(0);
+                this.topPanel.viewField.setText(viewText.replaceAll("[\t\n]", "  "));
+                this.topPanel.viewField.setCaretPosition(0);
             }
         }
     }
 
-    private String coloredLong(long var1) {
-        boolean var3 = this.topPanel.hexOffset;
-        StringBuffer var4 = new StringBuffer(var3 ? "0x" : "");
-        String var5 = var3 ? Long.toHexString(var1).toUpperCase() : Long.toString(var1);
-        int var7 = var5.length();
-        if (var3 && var7 % 2 == 1) {
-            var5 = "0" + var5;
+    private String coloredLong(long pos) {
+        boolean isHexOffset = this.topPanel.isHexOffset;
+        StringBuilder sb = new StringBuilder(isHexOffset ? "0x" : "");
+        String posString = isHexOffset ? Long.toHexString(pos).toUpperCase() : Long.toString(pos);
+        int len = posString.length();
+        if (isHexOffset && len % 2 == 1) {
+            posString = "0" + posString;
         }
 
-        var7 = var3 ? 0 : var7 % 3;
+        len = isHexOffset ? 0 : len % 3;
         if (this.isApplet) {
-            var4.append(var5);
+            sb.append(posString);
         } else {
-            int var6;
-            for (var6 = 0; var6 < var5.length(); ++var6) {
-                if (var6 % (var3 ? 4 : 6) == var7) {
-                    var4.append("<FONT color=blue>");
+            int i;
+            for (i = 0; i < posString.length(); ++i) {
+                if (i % (isHexOffset ? 4 : 6) == len) {
+                    sb.append("<FONT color=blue>");
                 }
 
-                var4.append(var5.charAt(var6));
-                if (var6 % (var3 ? 4 : 6) == (var3 ? 1 : 2 + var7)) {
-                    var4.append("</FONT>");
+                sb.append(posString.charAt(i));
+                if (i % (isHexOffset ? 4 : 6) == (isHexOffset ? 1 : 2 + len)) {
+                    sb.append("</FONT>");
                 }
             }
 
-            if (!var3 && var6 % 6 < 3 + var7) {
-                var4.append("</FONT>");
+            if (!isHexOffset && i % 6 < 3 + len) {
+                sb.append("</FONT>");
             }
         }
 
-        return var4.toString();
+        return sb.toString();
     }
 
-    public void actionPerformed(ActionEvent var1) {
-        if (var1.getSource() == this.timer) {
-            int[] var2 = this.pos2XY(this.lastPos);
+    @Override
+    public void actionPerformed(ActionEvent event) {
+        if (event.getSource() == this.timer) {
+            int[] xy = this.pos2XY(this.lastPos);
             this.caretVisible = ++this.caretVisible % 4;
             if ((this.caretVisible & 1) == 0) {
                 this.paintImmediately(
-                        this.wChar * (this.nibArea ? this.xNib[var2[0] << 1] : this.xTxt[var2[0]])
-                                - 1,
-                        this.hChar * var2[1] + 3,
-                        this.wChar + 1 << 1,
-                        this.hChar - 3);
-            }
-        } else if (var1.getSource() != this.InsDelB[4]) {
-            this.InsDelTF.setEnabled(true);
-        } else {
-            this.InsDelTF.setEnabled(true);
-            boolean var4 = this.topPanel.hexOffset;
-            String var3 =
-                    var4
-                            ? Long.toHexString(this.clipboardSize).toUpperCase()
-                            : Long.toString(this.clipboardSize);
-            if (var4 && var3.length() % 2 == 1) {
-                var3 = "0" + var3;
+                    this.wChar * (this.nibArea ? this.xNib[xy[0] << 1] : this.xTxt[xy[0]])
+                        - 1,
+                    this.hChar * xy[1] + 3,
+                    this.wChar + 1 << 1,
+                    this.hChar - 3);
             }
 
-            this.InsDelTF.setText((var4 ? "0x" : "") + var3);
+        } else if (event.getSource() != this.InsDelRadioButtons[4]) {
+            this.InsDelField.setEnabled(true);
+
+        } else {
+            this.InsDelField.setEnabled(true);
+            boolean isHexOffset = this.topPanel.isHexOffset;
+            String offsetString =
+                isHexOffset
+                ? Long.toHexString(this.clipboardSize).toUpperCase()
+                : Long.toString(this.clipboardSize);
+            if (isHexOffset && offsetString.length() % 2 == 1) {
+                offsetString = "0" + offsetString;
+            }
+
+            this.InsDelField.setText((isHexOffset ? "0x" : "") + offsetString);
             this.fromClipboard(true);
         }
     }
 
-    public void mouseClicked(MouseEvent var1) {}
-
-    public void mouseReleased(MouseEvent var1) {}
-
-    public void mouseEntered(MouseEvent var1) {
-        this.setCursor(new Cursor(2));
+    @Override
+    public void mouseClicked(MouseEvent event) {
     }
 
-    public void mouseExited(MouseEvent var1) {
-        this.setCursor((Cursor) null);
+    @Override
+    public void mouseReleased(MouseEvent event) {
     }
 
-    public void mousePressed(MouseEvent var1) {
+    @Override
+    public void mouseEntered(MouseEvent event) {
+        this.setCursor(new Cursor(Cursor.TEXT_CURSOR));
+    }
+
+    @Override
+    public void mouseExited(MouseEvent event) {
+        this.setCursor(null);
+    }
+
+    @Override
+    public void mousePressed(MouseEvent event) {
         this.focus();
-        this.lastPos = this.getCaretPos(var1);
+        this.lastPos = this.getCaretPos(event);
         this.caretVisible = 0;
-        if (var1.isShiftDown()) {
+        if (event.isShiftDown()) {
             this.isNibLow = false;
             this.rePaint();
         } else {
@@ -844,10 +836,14 @@ class binEdit extends JComponent
         }
     }
 
-    public void mouseMoved(MouseEvent var1) {}
+    @Override
+    public void mouseMoved(MouseEvent event) {
+    }
 
-    public void mouseDragged(MouseEvent var1) {
-        if (this.lastPos != (this.newPos = this.getCaretPos(var1))) {
+    @Override
+    public void mouseDragged(MouseEvent event) {
+        this.newPos = this.getCaretPos(event);
+        if (this.lastPos != this.newPos) {
             this.lastPos = this.newPos;
             this.isNibLow = false;
             this.rePaint();
@@ -855,42 +851,40 @@ class binEdit extends JComponent
     }
 
     protected long getCaretPos(MouseEvent var1) {
-        int var3 = -2;
-        int var4 =
-                (var1.getX() < this.getWidth()
-                                ? (0 < var1.getX() ? var1.getX() - 3 * this.wChar / 2 : 0)
-                                : this.getWidth())
-                        / this.wChar;
+        int n = -2;
+        int width =
+                (this.getWidth() <= var1.getX() ? this.getWidth() :
+                0 < var1.getX() ? var1.getX() - 3 * this.wChar / 2 :
+                0)
+            / this.wChar;
 
-        int var2;
-        for (var2 = 0; var2 < this.xNib.length && var3 < 0; ++var2) {
-            if (var4 < this.xNib[var2]) {
-                var3 = var2;
+        for (int i = 0; i < this.xNib.length && n < 0; ++i) {
+            if (width < this.xNib[i]) {
+                n = i;
             }
         }
 
-        if (var3 < 0 && var4 < this.xNib[this.xNib.length - 1] + 3) {
-            var3 = this.xNib.length - 1;
+        if (n < 0 && width < this.xNib[this.xNib.length - 1] + 3) {
+            n = this.xNib.length - 1;
         }
 
-        this.nibArea = -2 < var3;
-        this.isNibLow = 1 == (var3 & 1);
-        var3 >>= 1;
+        this.nibArea = -2 < n;
+        this.isNibLow = 1 == (n & 1);
+        n >>= 1;
 
-        for (var2 = 0; var2 < this.xTxt.length && var3 < 0; ++var2) {
-            if (var4 < this.xTxt[var2]) {
-                var3 = var2;
+        for (int i = 0; i < this.xTxt.length && n < 0; ++i) {
+            if (width < this.xTxt[i]) {
+                n = i;
             }
         }
 
-        this.newPos =
-                this.scrPos
-                        + (long)
-                                ((var1.getY() < this.getHeight()
-                                                ? (0 < var1.getY() ? var1.getY() / this.hChar : 0)
-                                                : this.maxRow - 1)
-                                        << 4)
-                        + (long) (var3 < 0 ? 15 : var3);
+        int height =
+            this.getHeight() <= var1.getY() ? this.maxRow - 1 :
+            0 < var1.getY() ? var1.getY() / this.hChar :
+            0;
+        this.newPos = this.scrPos
+            + (long) (height << 4)
+            + (long) (n < 0 ? 15 : n);
         if (this.virtualSize <= this.newPos || this.newPos < 0L) {
             this.newPos = this.virtualSize;
             this.isNibLow = false;
@@ -898,66 +892,70 @@ class binEdit extends JComponent
 
         if ((this.lastPos != this.newPos || this.lastPos + 1L != this.newPos)
                 && !this.undoStack.isEmpty()) {
-            ((edObj) this.undoStack.lastElement()).isEditing = false;
+            this.undoStack.lastElement().isEditing = false;
         }
 
         return this.newPos;
     }
 
-    public void mouseWheelMoved(MouseWheelEvent var1) {
-        if (!var1.isControlDown()) {
-            this.slideScr(
-                    this.scrPos
-                            + (long) var1.getWheelRotation()
-                                    * (var1.getScrollType() == 0 ? 32L : (long) this.maxPos + 1L),
-                    false);
+    @Override
+    public void mouseWheelMoved(MouseWheelEvent event) {
+        if (!event.isControlDown()) {
+            long scroll = event.getScrollType() == MouseWheelEvent.WHEEL_UNIT_SCROLL ? 32L :
+                (long) this.maxPos + 1L;
+            this.slideScr(this.scrPos + (long) event.getWheelRotation() * scroll, false);
+
         } else {
-            this.setGrid(this.fontSize - 3 * var1.getWheelRotation());
+            this.setGrid(this.fontSize - 3 * event.getWheelRotation());
             this.slideScr(this.scrPos, true);
             this.rePaint();
         }
     }
 
-    public void keyReleased(KeyEvent var1) {}
+    @Override
+    public void keyReleased(KeyEvent event) {
+    }
 
-    public void keyPressed(KeyEvent var1) {
-        switch (var1.getKeyCode()) {
-            case 8:
-                this.KeyFromMenu(90);
-            case 33:
+    @Override
+    public void keyPressed(KeyEvent event) {
+        switch (event.getKeyCode()) {
+            case KeyEvent.VK_BACK_SPACE:
+                this.KeyFromMenu(KeyEvent.VK_Z);
+
+            case KeyEvent.VK_PAGE_UP:
                 this.newPos = this.lastPos - ((long) this.maxPos - 15L);
                 break;
-            case 34:
+            case KeyEvent.VK_PAGE_DOWN:
                 this.newPos = this.lastPos + ((long) this.maxPos - 15L);
                 break;
-            case 35:
-                if (!var1.isControlDown() && this.lastPos + 15L <= this.virtualSize) {
+            case KeyEvent.VK_END:
+                if (!event.isControlDown() && this.lastPos + 15L <= this.virtualSize) {
                     this.newPos = this.lastPos | 15L;
                 } else {
                     this.newPos = this.virtualSize - 1L;
                 }
                 break;
-            case 36:
-                if (!var1.isControlDown()) {
+            case KeyEvent.VK_HOME:
+                if (!event.isControlDown()) {
                     this.newPos = this.lastPos & -16L;
                 } else {
                     this.newPos = 0L;
                 }
                 break;
-            case 37:
-            case 226:
+            case KeyEvent.VK_LEFT:
+            case KeyEvent.VK_KP_LEFT:
                 this.newPos = this.lastPos - (this.isNibLow ? 0L : 1L);
                 break;
-            case 38:
-            case 224:
+            case KeyEvent.VK_UP:
+            case KeyEvent.VK_KP_UP:
                 this.newPos = this.lastPos - 16L;
                 break;
-            case 39:
-            case 227:
+            case KeyEvent.VK_RIGHT:
+            case KeyEvent.VK_KP_RIGHT:
                 this.newPos = this.lastPos + 1L;
                 break;
-            case 40:
-            case 225:
+            case KeyEvent.VK_DOWN:
+            case KeyEvent.VK_KP_DOWN:
                 this.newPos = this.lastPos + 16L;
                 break;
             default:
@@ -965,72 +963,67 @@ class binEdit extends JComponent
         }
 
         this.isNibLow = false;
-        long var2 = this.newPos - this.lastPos;
-        if (this.newPos == -1L && this.lastPos < 99999L) {
+        long posDiff = this.newPos - this.lastPos;
+        if (this.newPos == -1L && this.lastPos < 99_999L) {
             this.lastPos = 0L;
-        } else if (this.newPos <= 0L && this.lastPos < 99999L) {
+        } else if (this.newPos <= 0L && this.lastPos < 99_999L) {
             this.lastPos = this.newPos & 15L;
-        } else if ((this.newPos == this.virtualSize || this.newPos == this.virtualSize + 1L)
-                && var2 == 1L) {
+        } else if ((this.newPos == this.virtualSize || this.newPos == this.virtualSize + 1L) && posDiff == 1L) {
             this.lastPos = this.virtualSize;
         } else if (this.virtualSize > this.newPos && this.newPos >= 0L) {
             this.lastPos = this.newPos;
         } else {
-            this.lastPos =
-                    (this.virtualSize - 1L & -16L)
-                            + (this.newPos & 15L)
-                            - ((this.newPos & 15L) <= (this.virtualSize - 1L & 15L) ? 0L : 16L);
+            this.lastPos = (this.virtualSize - 1L & -16L)
+                + (this.newPos & 15L)
+                - ((this.newPos & 15L) <= (this.virtualSize - 1L & 15L) ? 0L : 16L);
         }
 
-        if (!var1.isShiftDown()) {
+        if (!event.isShiftDown()) {
             this.firstPos = this.lastPos;
         }
 
-        if (!this.undoStack.empty() && ((edObj) this.undoStack.lastElement()).isEditing) {
-            ((edObj) this.undoStack.lastElement()).isEditing = false;
+        if (!this.undoStack.empty() && this.undoStack.lastElement().isEditing) {
+            this.undoStack.lastElement().isEditing = false;
         }
 
-        if (9223372036854775792L - (long) this.maxPos + 16L < this.scrPos) {
+        if (0x7fff_ffff_ffff_fff0L - (long) this.maxPos + 16L < this.scrPos) {
             this.slideScr(this.scrPos = Long.MAX_VALUE & -16L - (long) this.maxPos + 15L, true);
-        } else if (this.newPos >= this.scrPos && var2 != -((long) this.maxPos - 15L)) {
+
+        } else if (this.newPos >= this.scrPos && posDiff != -((long) this.maxPos - 15L)) {
+
             if (this.scrPos >= this.newPos - (long) this.maxPos
-                    && var2 != (long) this.maxPos - 15L) {
+                    && posDiff != (long) this.maxPos - 15L) {
                 this.timer.stop();
                 this.rePaint();
                 this.caretVisible = 0;
                 this.timer.restart();
             } else {
-                this.slideScr(this.scrPos += var2 + 15L & -16L, true);
+                this.slideScr(this.scrPos += posDiff + 15L & -16L, true);
             }
         } else {
-            this.slideScr(this.scrPos = this.scrPos + var2 & -16L, true);
+            this.slideScr(this.scrPos = this.scrPos + posDiff & -16L, true);
         }
     }
 
-    public void KeyFromMenu(int var1) {
-        char[] var2 =
-                new char[] {
-                    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'
-                };
-        boolean var3 = true;
-        boolean var4 = this.sav != null || this.find != null;
-        Object[] var8 =
-                new Object[] {"<html>Valid entry are:<br>decimal, hexa (0x..) or percent (..%)"};
-        int var5;
-        String var6;
-        long var10;
-        long var12;
-        switch (var1) {
-            case 45:
-            case 107:
-            case 109:
-            case 521:
-                this.setGrid(this.fontSize + (var1 != 107 && var1 != 521 ? -3 : 3));
+    public void KeyFromMenu(int keyCode) {
+        final char[] hexDigits = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+        boolean hasThread = this.saveThread != null || this.findThread != null;
+        final Object[] messages = new Object[]{"<html>Valid entry are:<br>decimal, hexa (0x..) or percent (..%)"};
+        long first;
+        long last;
+
+        switch (keyCode) {
+            case KeyEvent.VK_MINUS:
+            case KeyEvent.VK_ADD:
+            case KeyEvent.VK_SUBTRACT:
+            case KeyEvent.VK_PLUS:
+                final int delta = keyCode == KeyEvent.VK_ADD || keyCode == KeyEvent.VK_PLUS ? 3 : -3;
+                this.setGrid(this.fontSize + delta);
                 this.slideScr(this.scrPos, true);
                 this.rePaint();
                 break;
-            case 65:
-                if (this.virtualSize < 2147483648L) {
+            case KeyEvent.VK_A:
+                if (this.virtualSize < 0x8000_0000L) {
                     this.firstPos = 0L;
                     this.lastPos = this.virtualSize;
                     this.rePaint();
@@ -1038,152 +1031,158 @@ class binEdit extends JComponent
                     JOptionPane.showMessageDialog(this, "Selection cannot be greater than 2GiB");
                 }
                 break;
-            case 67:
-            case 88:
-                if (this.firstPos != this.lastPos && !var4 && !this.isApplet) {
-                    boolean var21 = this.firstPos < this.lastPos;
-                    var10 = var21 ? this.firstPos : this.lastPos;
-                    var12 = !var21 ? this.firstPos : this.lastPos;
+            case KeyEvent.VK_C:
+            case KeyEvent.VK_X:
+                if (this.firstPos != this.lastPos && !hasThread && !this.isApplet) {
+                    boolean isOrder = this.firstPos < this.lastPos;
+                    first = isOrder ? this.firstPos : this.lastPos;
+                    last = !isOrder ? this.firstPos : this.lastPos;
 
                     try {
-                        this.XCV = this.virtualStack(var10, var12);
-                        char[] var22;
+                        this.copyPasteV = this.virtualStack(first, last);
+                        char[] chars;
                         if (!this.nibArea) {
-                            var22 = new char[this.XCV.size()];
+                            chars = new char[this.copyPasteV.size()];
 
-                            for (var5 = 0; var5 < this.XCV.size(); ++var5) {
-                                var22[var5] =
-                                        (char) (255 & ((byte[]) ((byte[]) this.XCV.get(var5)))[0]);
-                                if (Character.isISOControl(var22[var5])
-                                        && "\t\\u000A\f\\u000D".indexOf(var22[var5]) < 0) {
+                            for (int i = 0; i < this.copyPasteV.size(); ++i) {
+                                byte[] bytes = this.copyPasteV.get(i);
+                                chars[i] = (char) (255 & bytes[0]);
+                                if (Character.isISOControl(chars[i])
+                                        && "\t\\u000A\f\\u000D".indexOf(chars[i]) < 0) {
                                     throw new Exception(
-                                            "\'" + (var22[var5] & 255) + "\' isIsoControl");
+                                        "'" + (chars[i] & 255) + "' isIsoControl");
                                 }
                             }
                         } else {
-                            var22 = new char[this.XCV.size() << 1];
+                            chars = new char[this.copyPasteV.size() << 1];
 
-                            for (var5 = 0; var5 < this.XCV.size(); ++var5) {
-                                var22[2 * var5] =
-                                        var2[
-                                                (255 & ((byte[]) ((byte[]) this.XCV.get(var5)))[0])
-                                                        >> 4];
-                                var22[2 * var5 + 1] =
-                                        var2[
-                                                (255 & ((byte[]) ((byte[]) this.XCV.get(var5)))[0])
-                                                        % 16];
+                            for (int i = 0; i < this.copyPasteV.size(); ++i) {
+                                byte[] bytes = this.copyPasteV.get(i);
+                                chars[2 * i] = hexDigits[(255 & bytes[0]) >> 4];
+                                chars[2 * i + 1] = hexDigits[(255 & bytes[0]) % 16];
                             }
                         }
 
                         this.clipboard.setContents(
-                                new StringSelection(new String(var22)), (ClipboardOwner) null);
-                    } catch (Exception var20) {
+                            new StringSelection(new String(chars)), null);
+                    } catch (Exception e) {
                         JOptionPane.showMessageDialog(
-                                this, "Can\'t copy text into the clipboard:\n" + var20);
+                            this, "Can't copy text into the clipboard:\n" + e);
                     }
 
-                    if (var1 == 88) {
-                        this.pushHObj(new edObj(var10, var12 - var10, 8), (String) null);
+                    if (keyCode == KeyEvent.VK_X) {
+                        this.pushHObj(new edObj(first, last - first, 8), null);
                     }
                 }
                 break;
-            case 68:
-            case 85:
-                var12 = 0L;
-                long var14 = this.virtualSize;
+            case KeyEvent.VK_D:
+            case KeyEvent.VK_U:
+                last = 0L;
+                long pos2 = this.virtualSize;
                 this.isNibLow = false;
-                Iterator var23;
-                if (this.markV != null && 0 < this.markV.size()) {
-                    for (var23 = this.markV.iterator();
-                            var23.hasNext();
-                            var14 = this.lastPos < var10 && var10 < var14 ? var10 : var14) {
-                        var10 = ((Long) var23.next()).longValue();
-                        var12 = var12 < var10 && var10 < this.lastPos ? var10 : var12;
+                if (this.markV != null && !this.markV.isEmpty()) {
+                    for (Iterator<Long> iter = this.markV.iterator();
+                            iter.hasNext();
+                            pos2 = this.lastPos < first && first < pos2 ? first : pos2) {
+                        first = iter.next();
+                        if (last < first && first < this.lastPos) {
+                            last = first;
+                        }
                     }
                 }
 
-                if (this.MarkV != null && 0 < this.MarkV.size()) {
-                    for (var23 = this.MarkV.iterator();
-                            var23.hasNext();
-                            var14 = this.lastPos < var10 && var10 < var14 ? var10 : var14) {
-                        var10 = ((Long) var23.next()).longValue();
-                        var12 = var12 < var10 && var10 < this.lastPos ? var10 : var12;
+                if (this.MarkV != null && !this.MarkV.isEmpty()) {
+                    for (Iterator<Long> iter = this.MarkV.iterator();
+                             iter.hasNext();
+                             pos2 = this.lastPos < first && first < pos2 ? first : pos2) {
+                        first = iter.next();
+                        if (last < first && first < this.lastPos) {
+                            last = first;
+                        }
                     }
                 }
 
-                this.firstPos = this.lastPos = var1 == 85 ? var12 : var14;
+                this.firstPos = this.lastPos =
+                    keyCode == KeyEvent.VK_U ? last : pos2;
                 this.slideScr(0L, true);
                 break;
-            case 70:
-                if (this.find == null) {
+            case KeyEvent.VK_F:
+                if (this.findThread == null) {
                     this.topPanel.find();
                 }
                 break;
-            case 71:
-                this.goTo(JOptionPane.showInputDialog(this, var8, "Hexeditor.jar: GoTo", -1));
+            case KeyEvent.VK_G:
+                String res1 = JOptionPane.showInputDialog(
+                    this,
+                    messages,
+                    "Hexeditor.jar: GoTo",
+                    JOptionPane.PLAIN_MESSAGE);
+                this.goTo(res1);
                 break;
-            case 77:
-                Long var9 = new Long(this.lastPos);
-                if (this.markV.remove(var9)) {
-                    this.MarkV.add(var9);
-                } else if (!this.MarkV.remove(var9)) {
-                    this.markV.add(var9);
+            case KeyEvent.VK_M:
+                Long pos = this.lastPos;
+                if (this.markV.remove(pos)) {
+                    this.MarkV.add(pos);
+                } else if (!this.MarkV.remove(pos)) {
+                    this.markV.add(pos);
                 }
 
                 this.rePaint();
                 break;
-            case 79:
-            case 81:
-                if (!var4 && !this.isApplet) {
-                    if (this.rAF == null && !this.undoStack.empty()
-                            || this.rAF != null && 1 < this.undoStack.size()) {
-                        var5 =
-                                JOptionPane.showConfirmDialog(
-                                        this, "Save the current modified file?");
-                        if (var5 == 2) {
+            case KeyEvent.VK_O:
+            case KeyEvent.VK_Q:
+                if (!hasThread && !this.isApplet) {
+                    if (this.randomAccessFile == null && !this.undoStack.empty()
+                            || this.randomAccessFile != null && 1 < this.undoStack.size()) {
+                        int res2 = JOptionPane.showConfirmDialog(
+                            this,
+                            "Save the current modified file?");
+                        if (res2 == JOptionPane.CANCEL_OPTION) {
                             break;
                         }
 
-                        if (var5 == 0) {
+                        if (res2 == JOptionPane.OK_OPTION) {
                             this.save1();
                             break;
                         }
                     }
 
                     this.closeFile();
-                    if (var1 == 79 && this.jFC.showOpenDialog(this) == 0) {
-                        this.loadFile(this.jFC.getSelectedFile());
+                    if (keyCode == KeyEvent.VK_O && this.fileChooser.showOpenDialog(this) == 0) {
+                        this.loadFile(this.fileChooser.getSelectedFile());
                     }
                 } else {
-                    JOptionPane.showMessageDialog(this, "Busy, save or find running.");
+                    JOptionPane.showMessageDialog(
+                        this,
+                        "Busy, save or find running.");
                 }
                 break;
-            case 80:
-                var5 = this.wChar * (this.xTxt[15] + 9);
-                var5 = var5 < this.getWidth() ? var5 : this.getWidth();
-                BufferedImage var16 = new BufferedImage(var5, this.hLimit + 10, 8);
-                this.paintImg(var16.getGraphics(), false);
-                var6 = this.f1.getPath();
-                var5 = 1;
+            case KeyEvent.VK_P:
+                int width = this.wChar * (this.xTxt[15] + 9);
+                width = Math.min(width, this.getWidth());
+                BufferedImage image = new BufferedImage(width, this.hLimit + 10, BufferedImage.TYPE_USHORT_565_RGB);
+                this.paintImg(image.getGraphics(), false);
+                String file1Path1 = this.file1.getPath();
+                width = 1;
 
-                File var17;
+                File file;
                 do {
-                    var17 = new File(var6 + var5 + ".png");
-                    ++var5;
-                } while (var17.exists());
+                    file = new File(file1Path1 + width + ".png");
+                    ++width;
+                } while (file.exists());
 
                 try {
-                    ImageIO.write(var16, "png", var17);
-                } catch (IOException var19) {
-                    var19.printStackTrace();
+                    ImageIO.write(image, "png", file);
+                } catch (IOException e) {
+                    e.printStackTrace();
                 }
                 break;
-            case 83:
-                if (this.sav == null && !this.isApplet) {
+            case KeyEvent.VK_S:
+                if (this.saveThread == null && !this.isApplet) {
                     this.save1();
                 }
                 break;
-            case 84:
+            case KeyEvent.VK_T:
                 this.nibArea = !this.nibArea;
                 this.isNibLow = false;
                 this.timer.stop();
@@ -1191,21 +1190,25 @@ class binEdit extends JComponent
                 this.caretVisible = 0;
                 this.timer.restart();
                 break;
-            case 86:
-                if (!var4 && !this.isApplet && (var6 = this.fromClipboard(true)) != null) {
-                    this.pushHObj(new edObj(this.lastPos, (long) var6.length(), 4), var6);
+            case KeyEvent.VK_V:
+                if (!hasThread && !this.isApplet) {
+                    String pasted = this.fromClipboard(true);
+                    if (pasted != null) {
+                        edObj eObj = new edObj(this.lastPos, pasted.length(), 4);
+                        this.pushHObj(eObj, pasted);
+                    }
                 }
                 break;
-            case 87:
+            case KeyEvent.VK_W:
                 this.isOled = !this.isOled;
                 this.rePaint();
                 break;
-            case 89:
+            case KeyEvent.VK_Y:
                 if (this.eObjCtrlY != null) {
-                    this.pushHObj(this.eObjCtrlY, (String) null);
+                    this.pushHObj(this.eObjCtrlY, null);
                     this.eObjCtrlY = null;
                 } else if (this.byteCtrlY != null) {
-                    this.eObj.B.push(this.byteCtrlY);
+                    this.eObj.bytes.push(this.byteCtrlY);
                     this.firstPos = ++this.lastPos;
                     if (this.scrPos < this.lastPos - (long) this.maxPos) {
                         this.scrPos += 16L;
@@ -1215,22 +1218,21 @@ class binEdit extends JComponent
                     this.byteCtrlY = null;
                 }
                 break;
-            case 90:
-                if (!var4
-                        && !this.undoStack.empty()
-                        && (1 < this.undoStack.size()
-                                || 1 == this.undoStack.size()
-                                        && 2 < ((edObj) this.undoStack.lastElement()).a1)) {
-                    this.eObj = this.eObjCtrlY = (edObj) this.undoStack.lastElement();
-                    if (this.eObj.isEditing && !this.eObj.B.empty()) {
-                        this.byteCtrlY = (Byte) this.eObj.B.pop();
+            case KeyEvent.VK_Z:
+                if (!hasThread && !this.undoStack.empty()
+                        && (1 < this.undoStack.size() ||
+                            1 == this.undoStack.size() && 2 < this.undoStack.lastElement().a1)) {
+                    this.eObj = this.eObjCtrlY = this.undoStack.lastElement();
+                    if (this.eObj.isEditing && !this.eObj.bytes.empty()) {
+                        this.byteCtrlY = this.eObj.bytes.pop();
                         if (!this.isNibLow) {
                             this.firstPos = --this.lastPos;
                         } else {
                             this.isNibLow = false;
                         }
 
-                        if ((this.eObj.size = (long) this.eObj.B.size()) == 0L) {
+                        this.eObj.size = this.eObj.bytes.size();
+                        if (this.eObj.size == 0L) {
                             this.undoStack.pop();
                             this.byteCtrlY = null;
                         } else {
@@ -1245,63 +1247,57 @@ class binEdit extends JComponent
                     this.slideScr(this.scrPos, true);
                 }
                 break;
-            case 127:
-            case 155:
-                if (!var4) {
-                    this.InsDelB[var1 == 127 ? 0 : 1].setSelected(true);
-                    this.InsDelTF.setEnabled(true);
-                    String var7 = this.fromClipboard(false);
-                    if (JOptionPane.showConfirmDialog(
-                                    this, this.InsDelOption, "Hexeditor.jar: DEL/INS", 2)
-                            != 2) {
-                        label298:
-                        {
-                            if (this.InsDelB[4].isSelected()) {
-                                if (!this.isApplet
-                                        && var7 != null
-                                        && this.virtualSize + (long) var7.length()
-                                                < Long.MAX_VALUE) {
-                                    this.pushHObj(
-                                            new edObj(this.lastPos, (long) var7.length(), 6), var7);
-                                }
-                            } else {
-                                if ((var6 = this.InsDelTF.getText()) == null) {
-                                    break label298;
-                                }
-
-                                this.String2long(var6);
-                                if (this.longInput < 1L) {
-                                    break label298;
-                                }
-
-                                if (this.InsDelB[0].isSelected()) {
-                                    this.longInput =
-                                            this.longInput + this.lastPos < this.virtualSize
-                                                    ? this.longInput
-                                                    : this.virtualSize - this.lastPos;
-                                } else if (Long.MAX_VALUE < this.virtualSize + this.longInput) {
-                                    this.longInput = Long.MAX_VALUE - this.virtualSize;
-                                }
-
-                                this.pushHObj(
-                                        new edObj(
-                                                this.lastPos,
-                                                this.longInput,
-                                                this.InsDelB[0].isSelected() ? 8 : 6),
-                                        this.InsDelB[0].isSelected()
-                                                ? null
-                                                : (this.InsDelB[1].isSelected()
-                                                        ? " "
-                                                        : (this.InsDelB[2].isSelected()
-                                                                ? "ÿ"
-                                                                : " ")));
+            case KeyEvent.VK_DELETE:
+            case KeyEvent.VK_INSERT:
+                if (!hasThread) {
+                    this.InsDelRadioButtons[keyCode == KeyEvent.VK_DELETE ? 0 : 1].setSelected(true);
+                    this.InsDelField.setEnabled(true);
+                    String pasted = this.fromClipboard(false);
+                    int res = JOptionPane.showConfirmDialog(
+                        this,
+                        this.InsDelOptions,
+                        "Hexeditor.jar: DEL/INS",
+                        JOptionPane.OK_CANCEL_OPTION);
+                    if (res == JOptionPane.OK_OPTION) labelHandleConfirmation: {
+                        if (this.InsDelRadioButtons[4].isSelected()) {
+                            if (!this.isApplet && pasted != null &&
+                                    this.virtualSize + (long) pasted.length() < Long.MAX_VALUE) {
+                                this.pushHObj(new edObj(this.lastPos, pasted.length(), 6), pasted);
+                            }
+                        } else {
+                            String text = this.InsDelField.getText();
+                            if (text == null) {
+                                break labelHandleConfirmation;
                             }
 
-                            this.isNibLow = false;
-                            this.eObjCtrlY = null;
-                            this.byteCtrlY = null;
-                            this.InsDelTF.setText("");
+                            this.String2long(text);
+                            if (this.longInput < 1L) {
+                                break labelHandleConfirmation;
+                            }
+
+                            if (this.InsDelRadioButtons[0].isSelected()) {
+                                if (this.longInput + this.lastPos >= this.virtualSize) {
+                                    this.longInput = this.virtualSize - this.lastPos;
+                                }
+                            } else if (Long.MAX_VALUE < this.virtualSize + this.longInput) {
+                                this.longInput = Long.MAX_VALUE - this.virtualSize;
+                            }
+
+                            this.pushHObj(
+                                new edObj(
+                                    this.lastPos,
+                                    this.longInput,
+                                    this.InsDelRadioButtons[0].isSelected() ? 8 : 6),
+                                this.InsDelRadioButtons[0].isSelected() ? null :
+                                this.InsDelRadioButtons[1].isSelected() ? " " :
+                                this.InsDelRadioButtons[2].isSelected() ? "ÿ"
+                                : " ");
                         }
+
+                        this.isNibLow = false;
+                        this.eObjCtrlY = null;
+                        this.byteCtrlY = null;
+                        this.InsDelField.setText("");
                     }
                 }
         }
@@ -1309,535 +1305,548 @@ class binEdit extends JComponent
         this.focus();
     }
 
-    private void pushHObj(edObj var1, String var2) {
+    private void pushHObj(edObj eObj, String s) {
         if (!this.undoStack.isEmpty()) {
-            (this.eObj = (edObj) this.undoStack.lastElement()).isEditing = false;
+            this.eObj = this.undoStack.lastElement();
+            this.eObj.isEditing = false;
         }
 
-        if (var2 != null) {
-            for (int var3 = 0; var3 < var2.length(); ++var3) {
-                var1.B.push(Byte.valueOf((byte) var2.charAt(var3)));
+        if (s != null) {
+            for (int i = 0; i < s.length(); ++i) {
+                eObj.bytes.push((byte) s.charAt(i));
             }
         }
 
-        this.undoStack.push(var1);
+        this.undoStack.push(eObj);
         this.firstPos = this.lastPos;
         this.doVirtual();
     }
 
-    private String fromClipboard(boolean var1) {
-        String var4 = null;
-        StringBuffer var5 = new StringBuffer();
+    private String fromClipboard(boolean isUI) {
+        String s = null;
+        StringBuilder sb = new StringBuilder();
 
         try {
-            var4 =
-                    (String)
-                            this.clipboard
-                                    .getContents((Object) null)
-                                    .getTransferData(DataFlavor.stringFlavor);
-            if (var4 == null || var4.length() < 1) {
+            s = (String) this.clipboard.getContents(null)
+                .getTransferData(DataFlavor.stringFlavor);
+            if (s == null || s.isEmpty()) {
                 throw new Exception("nothing to paste");
             }
 
-            if (Long.MAX_VALUE < this.lastPos + (long) var4.length()) {
+            if (Long.MAX_VALUE < this.lastPos + (long) s.length()) { // FIXME overflow (=> condition always false)
                 throw new Exception("file cannot exceed Long.MAX_VALUE");
             }
 
             if (this.nibArea) {
-                if (var4.length() % 2 != 0) {
+                if (s.length() % 2 != 0) {
                     throw new Exception(
-                            "Nibble area, String must be an hexa string with odd characters.");
+                        "Nibble area, String must be an hexa string with odd characters.");
                 }
 
-                var4 = var4.toUpperCase();
+                s = s.toUpperCase();
 
-                for (int var3 = 0; var3 < var4.length(); var3 += 2) {
-                    if ("0123456789ABCDEFabcdef".indexOf(var4.charAt(var3)) < 0
-                            || "0123456789ABCDEFabcdef".indexOf(var4.charAt(var3 + 1)) < 0) {
+                for (int i = 0; i < s.length(); i += 2) {
+                    if ("0123456789ABCDEFabcdef".indexOf(s.charAt(i)) < 0
+                        || "0123456789ABCDEFabcdef".indexOf(s.charAt(i + 1)) < 0) {
                         throw new Exception("Nibble area, String must be an hexa string.");
                     }
 
-                    var5.append(
-                            (char)
-                                    (("0123456789ABCDEFabcdef".indexOf(var4.charAt(var3)) << 4)
-                                            + "0123456789ABCDEFabcdef"
-                                                    .indexOf(var4.charAt(var3 + 1))));
+                    sb.append((char) (("0123456789ABCDEFabcdef".indexOf(s.charAt(i)) << 4)
+                                + "0123456789ABCDEFabcdef".indexOf(s.charAt(i + 1))));
                 }
 
-                var4 = var5.toString();
+                s = sb.toString();
             }
 
-            this.clipboardSize = (long) var4.length();
-        } catch (Exception var7) {
-            var4 = null;
+            this.clipboardSize = s.length();
+
+        } catch (Exception e) {
+            s = null;
             this.clipboardSize = 0L;
-            if (var1) {
+            if (isUI) {
                 JOptionPane.showMessageDialog(
-                        this, "Can\'t paste text from the clipboard:\n" + var7);
+                    this, "Can't paste text from the clipboard:\n" + e);
             }
         }
 
-        return var4;
+        return s;
     }
 
-    protected void String2long(String var1) {
+    protected void String2long(String s) {
         this.longInput = -1L;
-        boolean var3 = true;
-        boolean var4 = true;
-        int var5 = -1;
-        int var6 = 0;
-        int var2;
-        if ((var2 = var1.length()) != 0 && !var1.equals("-") && !var1.equals("+")) {
-            BigDecimal var7 = null;
-            BigInteger var8 = null;
-            boolean var9 = false;
-            boolean var10 = var1.startsWith("0x") || var1.startsWith("Ox") || var1.startsWith("ox");
-            String var11 = "yzafpnµm kMGTPEZY";
-            String var12 = "KMGTPE";
-            String[] var10000 = new String[] {"c", "d", "da", "h"};
-            var1.replaceAll(" ", "");
-            if (1 < var1.length() && !var10) {
-                if (var9 = 105 == var1.charAt(var1.length() - 1)) {
-                    var5 = var12.indexOf(var1.charAt(var1.length() - 2));
-                } else {
-                    int var18 =
-                            var1.endsWith("c")
-                                    ? -2
-                                    : (var1.endsWith("d")
-                                            ? -1
-                                            : (var1.endsWith("da")
-                                                    ? 1
-                                                    : (var1.endsWith("h")
-                                                            ? 2
-                                                            : (var1.endsWith("%") ? -2 : 0))));
-                    int var19 = var11.indexOf(var1.charAt(var1.length() - 1));
-                    var6 = var18 != 0 ? var18 : (-1 < var19 ? var19 * 3 - 24 : 0);
+        int sLen = s.length();
+        if (sLen == 0 || s.equals("-") || s.equals("+")) {
+            return;
+        }
+
+        int nBinPrefix = -1;
+        int shift = 0;
+        BigDecimal bigDecimal = null;
+        BigInteger bigInteger = null;
+        boolean flag = false;
+        boolean startsWith0x = s.startsWith("0x") || s.startsWith("Ox") || s.startsWith("ox");
+        String siPrefixes = "yzafpnµm kMGTPEZY";
+        String binPrefixes = "KMGTPE";
+//        String[] var10000 = new String[]{"c", "d", "da", "h"};
+
+        s.replaceAll(" ", ""); // FIXME assign returned value
+        if (1 < s.length() && !startsWith0x) {
+            flag = 'i' == s.charAt(s.length() - 1);
+            if (flag) {
+                nBinPrefix = binPrefixes.indexOf(s.charAt(s.length() - 2));
+            } else {
+                int shift1 =
+                    s.endsWith("c") ? -2 :
+                    s.endsWith("d") ? -1 :
+                    s.endsWith("da") ? 1 :
+                    s.endsWith("h") ? 2 :
+                    s.endsWith("%") ? -2 :
+                    0;
+                int nSiPrefix = siPrefixes.indexOf(s.charAt(s.length() - 1));
+                shift =
+                    shift1 != 0 ? shift1 :
+                    -1 < nSiPrefix ? nSiPrefix * 3 - 24 :
+                    0;
+            }
+        }
+
+        if (flag && (s.length() < 3 || nBinPrefix < 0)) {
+            return;
+        }
+
+        if (startsWith0x) {
+            if (s.length() < 3) {
+                return;
+            }
+
+            try {
+                bigInteger = new BigInteger(s.substring(2, sLen), 16);
+            } catch (Exception e) {
+                return;
+            }
+        } else {
+            while (0 < sLen) {
+                try {
+                    bigDecimal = new BigDecimal(s.substring(0, sLen));
+                    break;
+                } catch (Exception e) {
+                    --sLen;
                 }
             }
 
-            if (!var9 || var1.length() >= 3 && var5 >= 0) {
-                if (var10) {
-                    if (var1.length() < 3) {
-                        return;
-                    }
-
-                    try {
-                        var8 = new BigInteger(var1.substring(2, var2), 16);
-                    } catch (Exception var16) {
-                        return;
-                    }
-                } else {
-                    while (0 < var2) {
-                        try {
-                            var7 = new BigDecimal(var1.substring(0, var2));
-                            break;
-                        } catch (Exception var17) {
-                            --var2;
-                        }
-                    }
-
-                    if (var2 == 0 || var7 == null) {
-                        return;
-                    }
-
-                    var7 =
-                            var7.scaleByPowerOfTen(var6)
-                                    .multiply(BigDecimal.valueOf(1L << 10 * (var5 + 1)));
-                    var8 = var7.toBigInteger();
-                }
-
-                long var14 = var8.longValue();
-                if (var8.signum() < 0) {
-                    this.longInput = -1L;
-                } else if (BigInteger.valueOf(Long.MAX_VALUE).compareTo(var8) < 0) {
-                    this.longInput = Long.MAX_VALUE;
-                } else {
-                    this.longInput = var14;
-                }
+            if (sLen == 0 || bigDecimal == null) {
+                return;
             }
+
+            bigDecimal = bigDecimal.scaleByPowerOfTen(shift)
+                .multiply(BigDecimal.valueOf(1L << 10 * (nBinPrefix + 1)));
+            bigInteger = bigDecimal.toBigInteger();
+        }
+
+        long longValue = bigInteger.longValue();
+        if (bigInteger.signum() < 0) {
+            this.longInput = -1L;
+        } else if (BigInteger.valueOf(Long.MAX_VALUE).compareTo(bigInteger) < 0) {
+            this.longInput = Long.MAX_VALUE;
+        } else {
+            this.longInput = longValue;
         }
     }
 
-    public void keyTyped(KeyEvent var1) {
-        boolean var3 = this.sav != null || this.find != null;
-        char var5 = var1.getKeyChar();
-        boolean var6 = false;
-        int var7 = "0123456789ABCDEFabcdef".indexOf(Character.toUpperCase(var5));
-        if (!var1.isAltDown()
-                && !var1.isControlDown()
-                && !Character.isISOControl(var5)
-                && var5 < 256
-                && var1.getSource() == this
-                && 0L < this.virtualSize
-                && !var3
-                && (!this.nibArea || -1 < var7)) {
-            if (!this.undoStack.empty() && ((edObj) this.undoStack.lastElement()).isEditing) {
-                this.eObj = (edObj) this.undoStack.lastElement();
-            } else {
-                this.eObj = new edObj(this.lastPos, 0L, 4);
-                this.undoStack.push(this.eObj);
-                this.eObj.isEditing = true;
-            }
+    @Override
+    public void keyTyped(KeyEvent event) {
+        boolean hasThread = this.saveThread != null || this.findThread != null;
+        char ch = event.getKeyChar();
+        int index = "0123456789ABCDEFabcdef".indexOf(Character.toUpperCase(ch));
 
-            if (!this.nibArea) {
-                this.eObj.B.push(Byte.valueOf((byte) var5));
-                if (this.lastPos < Long.MAX_VALUE) {
-                    this.firstPos = ++this.lastPos;
-                }
-            } else if (-1 < "0123456789ABCDEFabcdef".indexOf(var5)) {
-                byte var4;
-                if ((int) (this.lastPos - this.scrPos) < this.srcV.size()) {
-                    var4 =
-                            ((byte[]) ((byte[]) this.srcV.get((int) (this.lastPos - this.scrPos))))
-                                    [0];
-                } else {
-                    var4 = 0;
-                }
-
-                var4 = (byte) (this.isNibLow ? (var4 & 240) + var7 : (var7 << 4) + (var4 & 15));
-                if (this.isNibLow
-                        && !this.eObj.B.empty()
-                        && this.eObj.p1 + (long) this.eObj.B.size() == this.lastPos + 1L) {
-                    this.eObj.B.pop();
-                }
-
-                this.eObj.B.push(Byte.valueOf(var4));
-                if (!(this.isNibLow = !this.isNibLow) && this.lastPos < Long.MAX_VALUE) {
-                    this.firstPos = ++this.lastPos;
-                }
-            }
-
-            if (this.scrPos < this.lastPos - (long) this.maxPos) {
-                this.scrPos += 16L;
-            }
-
-            this.eObjCtrlY = null;
-            this.byteCtrlY = null;
-            this.doVirtual();
+        if (event.isAltDown()
+                || event.isControlDown()
+                || Character.isISOControl(ch)
+                || ch >= 256
+                || event.getSource() != this
+                || 0L >= this.virtualSize
+                || hasThread
+                || (this.nibArea && -1 == index)) {
+            return;
         }
+
+        if (!this.undoStack.empty() && this.undoStack.lastElement().isEditing) {
+            this.eObj = this.undoStack.lastElement();
+        } else {
+            this.eObj = new edObj(this.lastPos, 0L, 4);
+            this.undoStack.push(this.eObj);
+            this.eObj.isEditing = true;
+        }
+
+        if (!this.nibArea) {
+            this.eObj.bytes.push((byte) ch);
+            if (this.lastPos < Long.MAX_VALUE) {
+                this.firstPos = ++this.lastPos;
+            }
+        } else if (0 <= "0123456789ABCDEFabcdef".indexOf(ch)) {
+            byte src;
+            int pos = (int) (this.lastPos - this.scrPos);
+            if (pos < this.srcV.size()) {
+                src = this.srcV.get(pos)[0];
+            } else {
+                src = 0;
+            }
+
+            src = (byte) (
+                this.isNibLow ? (src & 240) + index :
+                (index << 4) + (src & 15));
+            if (this.isNibLow
+                    && !this.eObj.bytes.empty()
+                    && this.eObj.p1 + (long) this.eObj.bytes.size() == this.lastPos + 1L) {
+                this.eObj.bytes.pop();
+            }
+
+            this.eObj.bytes.push(src);
+            this.isNibLow = !this.isNibLow;
+            if (!this.isNibLow && this.lastPos < Long.MAX_VALUE) {
+                this.firstPos = ++this.lastPos;
+            }
+        }
+
+        if (this.scrPos < this.lastPos - (long) this.maxPos) {
+            this.scrPos += 16L;
+        }
+
+        this.eObjCtrlY = null;
+        this.byteCtrlY = null;
+        this.doVirtual();
     }
 
     protected void doVirtual() {
-        this.v1.clear();
+        this.edV.clear();
         if (this.undoStack.isEmpty()) {
             this.scrPos = this.firstPos = this.lastPos = this.virtualSize = 0L;
             this.markV.clear();
             this.MarkV.clear();
             this.jSbSource = false;
-            this.jSB.setValue(0);
-            this.topPanel.JTFile.setText("");
-            this.topPanel.fJTF[1].setText("");
+            this.scrollBar.setValue(0);
+            this.topPanel.fileField.setText("");
+            this.topPanel.findFields[1].setText("");
             this.setGrid(this.fontSize);
-            this.setSrc();
-            this.rePaint();
-            this.caretVisible = 0;
-            this.timer.restart();
+
         } else {
-            edObj var5 = (edObj) this.undoStack.lastElement();
-            if (var5.a1 != 6 && var5.a1 != 8) {
-                var5.size = var5.B.size() != 0 ? (long) var5.B.size() : var5.size;
-                var5.p2 = var5.p1 + var5.size;
+            edObj eObj = this.undoStack.lastElement();
+            if (eObj.a1 != 6 && eObj.a1 != 8) {
+                eObj.size = !eObj.bytes.isEmpty() ? (long) eObj.bytes.size() : eObj.size;
+                eObj.p2 = eObj.p1 + eObj.size;
             }
 
             if (!this.isApplet) {
-                String var10 = this.topPanel.JTFile.getText();
-                if (var10.endsWith(" *")) {
-                    var10 = var10.substring(0, var10.length() - 2);
+                String text = this.topPanel.fileField.getText();
+                if (text.endsWith(" *")) {
+                    text = text.substring(0, text.length() - 2);
                 }
 
-                this.topPanel.JTFile.setText(var10 + (1 < this.undoStack.size() ? " *" : ""));
+                this.topPanel.fileField.setText(
+                    text + (1 < this.undoStack.size() ? " *" : ""));
             }
 
-            var5 = (edObj) this.undoStack.firstElement();
-            this.v1.add(new edObj(0L, var5.p2, var5.offset, var5));
+            eObj = this.undoStack.firstElement();
+            this.edV.add(new edObj(0L, eObj.p2, eObj.offset, eObj));
 
-            for (int var1 = 1; var1 < this.undoStack.size(); ++var1) {
-                var5 = (edObj) this.undoStack.get(var1);
-                edObj var9 = var5.a1 == 8 ? null : new edObj(var5.p1, var5.p2, var5.offset, var5);
-                long var3 = var5.a1 == 6 ? var5.size : (var5.a1 == 8 ? -var5.size : 0L);
-                int var2 = this.v1.size() - 1;
-                if (var5 != null && var5.p1 != var5.p2) {
-                    for (; -1 < var2; --var2) {
-                        edObj var6 = (edObj) this.v1.get(var2);
-                        if (var2 == this.v1.size() - 1 && var6.p2 == var5.p1) {
-                            this.v1AddNoNull(var2 + 1, var9);
+            for (int i = 1; i < this.undoStack.size(); ++i) {
+                eObj = this.undoStack.get(i);
+                edObj eObj1 =
+                    eObj.a1 == 8 ? null :
+                    new edObj(eObj.p1, eObj.p2, eObj.offset, eObj);
+                long size =
+                    eObj.a1 == 6 ? eObj.size :
+                    eObj.a1 == 8 ? -eObj.size :
+                    0L;
+                int edSize = this.edV.size() - 1;
+                if (eObj != null && eObj.p1 != eObj.p2) {
+                    for (; 0 <= edSize; --edSize) {
+                        edObj eObj2 = this.edV.get(edSize);
+                        if (edSize == this.edV.size() - 1 && eObj2.p2 == eObj.p1) {
+                            this.v1AddNoNull(edSize + 1, eObj1);
                             break;
                         }
 
-                        if (var5.p2 <= var6.p1) {
-                            var6.p1 += var3;
-                            var6.p2 += var3;
+                        if (eObj.p2 <= eObj2.p1) {
+                            eObj2.p1 += size;
+                            eObj2.p2 += size;
                         } else {
-                            if (var5.a1 == 6 && var6.p1 == var5.p1) {
-                                var6.p1 += var3;
-                                var6.p2 += var3;
-                                this.v1AddNoNull(var2, var9);
+                            if (eObj.a1 == 6 && eObj2.p1 == eObj.p1) {
+                                eObj2.p1 += size;
+                                eObj2.p2 += size;
+                                this.v1AddNoNull(edSize, eObj1);
                                 break;
                             }
 
-                            if (var5.a1 != 6 && var5.p1 <= var6.p1 && var6.p2 <= var5.p2) {
-                                this.v1.remove(var2);
-                                if (var6.p2 == var5.p2) {
-                                    this.v1AddNoNull(var2, var9);
+                            if (eObj.a1 != 6 && eObj.p1 <= eObj2.p1 && eObj2.p2 <= eObj.p2) {
+                                this.edV.remove(edSize);
+                                if (eObj2.p2 == eObj.p2) {
+                                    this.v1AddNoNull(edSize, eObj1);
                                 }
                             } else {
-                                if (var5.a1 != 6 && var5.p1 < var6.p2 && var6.p2 <= var5.p2) {
-                                    if (var6.p2 == var5.p2) {
-                                        this.v1AddNoNull(var2 + 1, var9);
+                                if (eObj.a1 != 6 && eObj.p1 < eObj2.p2 && eObj2.p2 <= eObj.p2) {
+                                    if (eObj2.p2 == eObj.p2) {
+                                        this.v1AddNoNull(edSize + 1, eObj1);
                                     }
 
-                                    var6.p2 = var5.p1;
+                                    eObj2.p2 = eObj.p1;
                                     break;
                                 }
 
-                                if (var5.a1 == 6 || var5.p1 > var6.p1 || var6.p1 >= var5.p2) {
-                                    if (var6.p1 < var5.p1 && (var5.p2 < var6.p2 || var5.a1 == 6)) {
-                                        edObj var7 = this.v1Clone(var6);
-                                        var7.p2 = var5.p1;
-                                        var6.offset += (var5.a1 == 6 ? var5.p1 : var5.p2) - var6.p1;
-                                        var6.p1 = var5.a1 == 8 ? var5.p1 : var5.p2;
-                                        var6.p2 += var3;
-                                        if (var6.p1 == var6.p2) {
-                                            this.v1.remove(var2);
+                                if (eObj.a1 == 6 || eObj.p1 > eObj2.p1 || eObj2.p1 >= eObj.p2) {
+                                    if (eObj2.p1 < eObj.p1 && (eObj.p2 < eObj2.p2 || eObj.a1 == 6)) {
+                                        edObj eObj2a = this.v1Clone(eObj2);
+                                        eObj2a.p2 = eObj.p1;
+                                        eObj2.offset += (eObj.a1 == 6 ? eObj.p1 : eObj.p2) - eObj2.p1;
+                                        eObj2.p1 = eObj.a1 == 8 ? eObj.p1 : eObj.p2;
+                                        eObj2.p2 += size;
+                                        if (eObj2.p1 == eObj2.p2) {
+                                            this.edV.remove(edSize);
                                         }
 
-                                        this.v1AddNoNull(var2, var9);
-                                        this.v1AddNoNull(var2, var7);
+                                        this.v1AddNoNull(edSize, eObj1);
+                                        this.v1AddNoNull(edSize, eObj2a);
                                     }
                                     break;
                                 }
 
-                                var6.offset += var5.p2 - var6.p1;
-                                var6.p1 = var5.p2;
-                                this.v1AddNoNull(var2, var9);
+                                eObj2.offset += eObj.p2 - eObj2.p1;
+                                eObj2.p1 = eObj.p2;
+                                this.v1AddNoNull(edSize, eObj1);
                             }
                         }
                     }
                 }
             }
 
-            long var12 =
-                    this.v1 != null && this.v1.size() != 0
-                            ? ((edObj) this.v1.lastElement()).p2
-                            : 0L;
-            if (this.virtualSize != var12) {
-                this.virtualSize = var12;
+            long p2 =
+                this.edV != null && !this.edV.isEmpty()
+                    ? this.edV.lastElement().p2
+                    : 0L;
+            if (this.virtualSize != p2) {
+                this.virtualSize = p2;
                 this.setGrid(this.fontSize);
             }
+        }
 
-            this.setSrc();
-            this.rePaint();
-            this.caretVisible = 0;
-            this.timer.restart();
+        this.setSrc();
+        this.rePaint();
+        this.caretVisible = 0;
+        this.timer.restart();
+    }
+
+    protected void v1AddNoNull(int index, edObj eObj) {
+        if (eObj != null
+                && 0 <= index
+                && index <= this.edV.size()
+                && eObj.p1 != eObj.p2) {
+            this.edV.add(index, eObj);
         }
     }
 
-    protected void v1AddNoNull(int var1, edObj var2) {
-        if (var2 != null && -1 < var1 && var1 <= this.v1.size() && var2.p1 != var2.p2) {
-            this.v1.add(var1, var2);
-        }
-    }
-
-    protected edObj v1Clone(edObj var1) {
-        if (var1 != null && var1.p1 != var1.p2) {
-            edObj var2 = new edObj(var1.p1, var1.p2, var1.offset, var1.o);
-            return var2;
+    protected edObj v1Clone(edObj eObj) {
+        if (eObj != null && eObj.p1 != eObj.p2) {
+            return new edObj(eObj.p1, eObj.p2, eObj.offset, eObj.o);
         } else {
             return null;
         }
     }
 
-    protected Vector virtualStack(long var1, long var3) {
-        byte[] var5 = new byte[2];
-        int var8 = 0;
+    protected Vector<byte[]> virtualStack(long first, long last) {
+        byte[] bytes = new byte[2];
+        int i = 0;
         int var10 = 0;
-        long var17 = var1;
-        edObj var19 = null;
+        long first1 = first;
+        edObj eObj = null;
 
-        Vector var20;
-        for (var20 = new Vector(); var8 < this.v1.size(); ++var8) {
-            var19 = (edObj) this.v1.get(var8);
-            if (var1 < var19.p2) {
+        Vector<byte[]> byteV;
+        for (byteV = new Vector<>(); i < this.edV.size(); ++i) {
+            eObj = this.edV.get(i);
+            if (first < eObj.p2) {
                 break;
             }
         }
 
-        while (var8 < this.v1.size()) {
-            var19 = (edObj) this.v1.get(var8);
-            long var11 = var19.p1 - var19.offset;
-            long var13 = var19.p2 < var3 ? var19.p2 : var3;
-            if (var19.o.a1 != 4 && var19.o.a1 != 2 && (var19.o.a1 != 6 || 1 >= var19.o.B.size())) {
-                if (var19.o.a1 == 6) {
-                    var5[1] = (byte) var19.o.a1;
+        while (i < this.edV.size()) {
+            eObj = this.edV.get(i);
+            long p1 = eObj.p1 - eObj.offset;
+            long p2 = Math.min(eObj.p2, last);
+            if (eObj.o.a1 != 4
+                    && eObj.o.a1 != 2
+                    && (eObj.o.a1 != 6 || 1 >= eObj.o.bytes.size())) {
+                if (eObj.o.a1 == 6) {
+                    bytes[1] = (byte) eObj.o.a1;
 
-                    for (var5[0] = ((Byte) var19.o.B.get(0)).byteValue(); var17 < var13; ++var17) {
-                        var20.add(var5.clone());
+                    for (bytes[0] = eObj.o.bytes.get(0); first1 < p2; ++first1) {
+                        byteV.add(bytes.clone());
                     }
                 } else {
                     try {
-                        var5[1] = (byte) (var19.p1 != var19.offset ? 1 : var19.o.a1);
-                        byte[] var6 = new byte[(int) (var13 - var17)];
-                        this.rAF.seek(var17 - var11);
-                        int var9 = 0;
+                        bytes[1] = (byte) (eObj.p1 != eObj.offset ? 1 : eObj.o.a1);
+                        byte[] bytes1 = new byte[(int) (p2 - first1)];
+                        this.randomAccessFile.seek(first1 - p1);
+                        int off = 0;
 
-                        int var7;
-                        while (var9 < var6.length) {
-                            var7 = this.rAF.read(var6, var9, var6.length - var9);
-                            if (var7 < 0) {
+                        int nRead;
+                        while (off < bytes1.length) {
+                            nRead = this.randomAccessFile.read(bytes1, off, bytes1.length - off);
+                            if (nRead < 0) {
                                 throw new IOException("EOF");
                             }
 
-                            var9 += var7;
-                            if (var7 == 0) {
+                            off += nRead;
+                            if (nRead == 0) {
                                 ++var10;
                                 if (var10 == 9) {
-                                    var17 = var13;
+                                    first1 = p2;
                                     JOptionPane.showMessageDialog(this, "Unable to access file");
                                 }
                             }
                         }
 
-                        for (var7 = 0; var17 < var13 || var7 < var10; ++var7) {
-                            var5[0] = var6[var7];
-                            var20.add(var5.clone());
-                            ++var17;
+                        for (nRead = 0; first1 < p2 || nRead < var10; ++nRead) {
+                            bytes[0] = bytes1[nRead];
+                            byteV.add(bytes.clone());
+                            ++first1;
                         }
-                    } catch (Exception var22) {
-                        System.err.println("virtualStack " + var22);
+                    } catch (Exception e) {
+                        System.err.println("virtualStack " + e);
                     }
                 }
             } else {
-                for (var5[1] = (byte) (var19.a1 == 2 && var19.p1 != var19.offset ? 1 : var19.o.a1);
-                        var17 < var13;
-                        ++var17) {
-                    var5[0] = ((Byte) var19.o.B.get((int) (var17 - var11))).byteValue();
-                    var20.add(var5.clone());
+                for (bytes[1] = (byte) (eObj.a1 == 2 && eObj.p1 != eObj.offset ? 1 : eObj.o.a1);
+                        first1 < p2; ++first1) {
+                    bytes[0] = eObj.o.bytes.get((int) (first1 - p1));
+                    byteV.add(bytes.clone());
                 }
             }
 
-            if (var3 < var19.p2) {
+            if (last < eObj.p2) {
                 break;
             }
 
-            ++var8;
+            ++i;
         }
 
-        return var20;
+        return byteV;
     }
 
     protected void setSrc() {
-        this.srcV =
-                this.virtualStack(
-                        this.scrPos,
-                        this.scrPos + (long) this.maxPos + 1L < 0L
-                                ? Long.MAX_VALUE
-                                : this.scrPos + (long) this.maxPos + 1L);
+        long pos = this.scrPos + (long) this.maxPos + 1L;
+        long pos2 = pos >= 0L ? pos : Long.MAX_VALUE;
+        this.srcV = this.virtualStack(this.scrPos, pos2);
     }
 
     protected boolean save1() {
-        JFileChooser var1 = new JFileChooser();
-        var1.setFileSelectionMode(0);
-        var1.setAcceptAllFileFilterUsed(false);
-        var1.setDialogTitle("Save as...");
-        var1.setDialogType(1);
-        var1.setMultiSelectionEnabled(false);
-        var1.setDragEnabled(false);
-        var1.setFileFilter(new filterRW());
-        if (this.f1 != null && this.f1.canWrite()) {
-            var1.setSelectedFile(this.f1);
+        JFileChooser jfc = new JFileChooser();
+        jfc.setFileSelectionMode(JFileChooser.FILES_ONLY);
+        jfc.setAcceptAllFileFilterUsed(false);
+        jfc.setDialogTitle("Save as...");
+        jfc.setDialogType(JFileChooser.SAVE_DIALOG);
+        jfc.setMultiSelectionEnabled(false);
+        jfc.setDragEnabled(false);
+        jfc.setFileFilter(new filterRW());
+
+        if (this.file1 != null && this.file1.canWrite()) {
+            jfc.setSelectedFile(this.file1);
         } else {
-            var1.setCurrentDirectory(
-                    this.f1 == null
-                            ? new File(System.getProperty("user.dir"))
-                            : this.f1.getParentFile());
+            jfc.setCurrentDirectory(
+                this.file1 == null
+                    ? new File(System.getProperty("user.dir"))
+                    : this.file1.getParentFile());
         }
 
-        if (var1.showSaveDialog(this) != 0) {
+        if (jfc.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) {
             return false;
-        } else {
-            this.topPanel.saveRunning(true);
-            if (this.sav != null) {
-                this.sav.interrupt();
-            }
-
-            (this.sav = new saveT()).setDaemon(true);
-            this.sav.f1 = this.f1;
-            this.sav.f2 = var1.getSelectedFile();
-            this.sav.v1 = this.v1;
-            this.sav.hexV = this;
-            this.sav.jPBar = this.topPanel.savePBar;
-            this.sav.start();
-            return true;
         }
+
+        this.topPanel.saveRunning(true);
+        if (this.saveThread != null) {
+            this.saveThread.interrupt();
+        }
+
+        this.saveThread = new saveT();
+        this.saveThread.setDaemon(true);
+        this.saveThread.file1 = this.file1;
+        this.saveThread.file2 = jfc.getSelectedFile();
+        this.saveThread.edV = this.edV;
+        this.saveThread.hexV = this;
+        this.saveThread.progressBar = this.topPanel.savePBar;
+        this.saveThread.start();
+
+        return true;
     }
 
-    protected void save2(File var1) {
-        if (var1 != null) {
-            this.f1 = new File(var1, "");
-            this.topPanel.JTFile.setText(
-                    this.f1.toString() + (this.f1.canWrite() ? "" : " (ReadOnly)"));
+    protected void save2(File f) {
+        if (f != null) {
+            this.file1 = new File(f, "");
+            this.topPanel.fileField.setText(
+                this.file1 + (this.file1.canWrite() ? "" : " (ReadOnly)"));
 
             try {
-                this.rAF = new RandomAccessFile(this.f1, "rw");
-            } catch (Exception var3) {
-                System.err.println(var3);
+                this.randomAccessFile = new RandomAccessFile(this.file1, "rw");
+            } catch (Exception e) {
+                System.err.println(e);
             }
 
             this.undoStack.clear();
-            this.undoStack.push(new edObj(0L, this.f1.length(), 0));
+            this.undoStack.push(new edObj(0L, this.file1.length(), 0));
             this.doVirtual();
         }
 
         this.topPanel.saveRunning(false);
-        this.sav = null;
+        this.saveThread = null;
         this.eObjCtrlY = null;
         this.byteCtrlY = null;
     }
 
     protected void find1() {
-        if (this.virtualSize != 0L
-                && (this.topPanel.finByte != null || this.topPanel.findChar != null)) {
-            this.String2long(this.topPanel.fJTF[1].getText());
-            if (this.find != null) {
-                this.find.interrupt();
-            }
-
-            (this.find = new findT()).setDaemon(true);
-            this.find.f1 = this.f1;
-            this.find.v1 = this.v1;
-            this.find.isApplet = this.isApplet;
-            this.find.ignoreCase = this.topPanel.useFindChar;
-            this.find.pos =
-                    this.longInput < 0L
-                            ? (this.firstPos == this.lastPos ? this.lastPos : this.lastPos + 1L)
-                            : (this.virtualSize - 1L < this.longInput
-                                    ? this.virtualSize - 1L
-                                    : (this.virtualSize - 1L == this.longInput
-                                            ? 0L
-                                            : this.longInput + 1L));
-            this.find.inBytes = this.topPanel.finByte;
-            this.find.inChars = this.topPanel.findChar;
-            this.find.wordSize = 1 << this.topPanel.fJCB[3].getSelectedIndex();
-            this.find.hexV = this;
-            this.find.jPBar = this.topPanel.findPBar;
-            this.topPanel.findRunning(true);
-            this.find.start();
+        if (this.virtualSize == 0L
+                || (this.topPanel.finByte == null && this.topPanel.findChar == null)) {
+            return;
         }
+
+        this.String2long(this.topPanel.findFields[1].getText());
+        if (this.findThread != null) {
+            this.findThread.interrupt();
+        }
+
+        this.findThread = new findT();
+        this.findThread.setDaemon(true);
+        this.findThread.file1 = this.file1;
+        this.findThread.edV = this.edV;
+        this.findThread.isApplet = this.isApplet;
+        this.findThread.ignoreCase = this.topPanel.useFindChar;
+        this.findThread.pos =
+            this.longInput < 0L
+            ? (this.firstPos == this.lastPos ? this.lastPos : this.lastPos + 1L)
+            : this.virtualSize - 1L < this.longInput
+            ? this.virtualSize - 1L
+            : this.virtualSize - 1L == this.longInput
+            ? 0L
+            : this.longInput + 1L;
+        this.findThread.inBytes = this.topPanel.finByte;
+        this.findThread.inChars = this.topPanel.findChar;
+        this.findThread.wordSize = 1 << this.topPanel.findComboBoxes[3].getSelectedIndex();
+        this.findThread.hexV = this;
+        this.findThread.jPBar = this.topPanel.findPBar;
+        this.topPanel.findRunning(true);
+        this.findThread.start();
     }
 
-    protected void find2(long var1, long var3) {
+    protected void find2(long first, long last) {
         this.slideScr(0L, true);
-        StringBuffer var5 = new StringBuffer("0x");
-        String var6 = Long.toHexString(var3).toUpperCase();
-        if (var6.length() % 2 == 1) {
-            var5.append("0");
+        StringBuilder sb = new StringBuilder("0x");
+        String hex = Long.toHexString(last).toUpperCase();
+        if (hex.length() % 2 == 1) {
+            sb.append("0");
         }
 
         this.topPanel.findRunning(false);
-        this.topPanel.fJTF[1].setText(var5.append(var6).toString());
-        this.find = null;
-        this.lastPos = var3;
-        this.firstPos = var1;
+        this.topPanel.findFields[1].setText(sb.append(hex).toString());
+        this.findThread = null;
+        this.lastPos = last;
+        this.firstPos = first;
         this.isNibLow = false;
         this.slideScr(0L, true);
     }

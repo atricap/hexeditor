@@ -5,10 +5,12 @@ import javax.swing.filechooser.FileFilter;
 
 class filterRW extends FileFilter {
 
-    public boolean accept(File var1) {
-        return var1.canWrite();
+    @Override
+    public boolean accept(File f) {
+        return f.canWrite();
     }
 
+    @Override
     public String getDescription() {
         return "";
     }

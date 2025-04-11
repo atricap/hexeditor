@@ -8,13 +8,13 @@ import javax.swing.JProgressBar;
 
 class findT extends Thread {
 
-    File f1;
-    Vector v1;
+    File file1;
+    Vector<edObj> edV;
     boolean isApplet;
     boolean ignoreCase;
     long pos;
     byte[] inBytes = null;
-    byte[][][] inChars = (byte[][][]) null;
+    byte[][][] inChars = null;
     binEdit hexV;
     JProgressBar jPBar;
     private boolean isFound = false;
@@ -22,241 +22,220 @@ class findT extends Thread {
     private int inCharsLength = 0;
     protected int wordSize;
     private long virtualSize;
-    private Vector pile = new Vector();
+    private final Vector pile = new Vector();
 
+    @Override
     public void run() {
-        boolean var1 = false;
-        boolean var3 = false;
-        FileInputStream var5 = null;
-        byte[] var6 = new byte[2097152];
-        edObj var7 = null;
-        if (this.v1 != null && this.v1.size() != 0) {
-            long var12 = 0L;
-            this.virtualSize = ((edObj) this.v1.lastElement()).p2;
-            this.jPBar.setMaximum(1073741824);
-            int var2;
-            int var4;
-            int var18;
-            if (!this.ignoreCase) {
-                this.inCharsLength = this.inBytes.length;
-            } else {
-                for (var2 = 0; var2 < this.inChars.length; ++var2) {
-                    var4 = 0;
-
-                    for (var18 = 0; var18 < this.inChars[var2].length; ++var18) {
-                        var4 =
-                                var4 < this.inChars[var2][var18].length
-                                        ? var4
-                                        : this.inChars[var2][var18].length;
-                    }
-
-                    this.inCharsLength += var4;
-                }
-            }
-
-            for (var18 = 0; var18 < this.v1.size(); ++var18) {
-                var7 = (edObj) this.v1.get(var18);
-                if (this.pos < var7.p2) {
-                    break;
-                }
-            }
-
-            try {
-                if (this.f1 != null) {
-                    var5 = new FileInputStream(this.f1);
-                }
-
-                while (var18 < this.v1.size() && this.next()) {
-                    var7 = (edObj) this.v1.get(var18);
-                    long var8 = var7.p1 - var7.offset;
-                    if (var7.o.a1 != 4
-                            && var7.o.a1 != 2
-                            && (var7.o.a1 != 6 || 1 >= var7.o.B.size())) {
-                        if (var7.o.a1 == 6) {
-                            byte var17 = ((Byte) var7.o.B.get(0)).byteValue();
-
-                            while (this.pos < var7.p2 && this.next()) {
-                                this.findB(var17);
-                                if (this.pile.size() == 0
-                                        && this.pos < var7.p2 - (long) this.inCharsLength) {
-                                    this.pos = var7.p2 - (long) this.inCharsLength;
-                                }
-                            }
-                        } else {
-                            long var10;
-                            for (var10 = this.pos - var8;
-                                    var12 < var10;
-                                    var12 += var5.skip(var10 - var12)) {;
-                            }
-
-                            while (this.pos < var7.p2 && this.next()) {
-                                var10 = var7.p2 - this.pos;
-                                var2 = var5.read(var6, 0, var10 < 2097152L ? (int) var10 : 2097152);
-                                if (var2 <= 0) {
-                                    throw new IOException(
-                                            var2 == 0 ? "Unable to access file" : "EOF");
-                                }
-
-                                var12 += (long) var2;
-
-                                for (var4 = 0; var4 < var2 && this.next(); ++var4) {
-                                    this.findB(var6[var4]);
-                                }
-
-                                this.setJPBar();
-                            }
-                        }
-                    } else {
-                        while (this.pos < var7.p2 && this.next()) {
-                            this.findB(((Byte) var7.o.B.get((int) (this.pos - var8))).byteValue());
-                        }
-                    }
-
-                    this.setJPBar();
-                    ++var18;
-                }
-
-                if (this.f1 != null) {
-                    var5.close();
-                }
-            } catch (Exception var16) {
-                System.err.println(
-                        "findT " + var16 + "\n\t" + var7 + "\n\t" + var18 + "\t" + this.pos);
-            }
-
-            try {
-                var5.close();
-            } catch (Exception var15) {;
-            }
-
-            this.hexV.find2(
-                    this.pos,
-                    this.pos
-                            - (long)
-                                    (this.isFound
-                                            ? (this.ignoreCase
-                                                    ? this.realLength
-                                                    : this.inBytes.length)
-                                            : 0));
+        final int twoMiB = 2 * 1024 * 1024;
+        final long twoMiBL = 2L * 1024L * 1024L;
+        final int oneGiB = 1 * 1024 * 1024 * 1024;
+        byte[] bytes = new byte[twoMiB];
+        edObj eObj = null;
+        if (this.edV == null || this.edV.isEmpty()) {
+            return;
         }
+
+        this.virtualSize = this.edV.lastElement().p2;
+        this.jPBar.setMaximum(oneGiB);
+        int m;
+        int k;
+        if (!this.ignoreCase) {
+            this.inCharsLength = this.inBytes.length;
+        } else {
+            for (byte[][] inChar : this.inChars) {
+                m = 0;
+                for (k = 0; k < inChar.length; ++k) {
+                    m = Math.min(m, inChar[k].length); // TODO is always 0?!
+                }
+                this.inCharsLength += m; // TODO ... so this does nothing?
+            }
+        }
+
+        for (k = 0; k < this.edV.size(); ++k) {
+            eObj = this.edV.get(k);
+            if (this.pos < eObj.p2) {
+                break;
+            }
+        }
+
+        try (FileInputStream in = this.file1 != null ? new FileInputStream(this.file1) : null) {
+            for (long ii = 0L; k < this.edV.size() && this.next(); ++k) {
+                eObj = this.edV.get(k);
+                long p1a = eObj.p1 - eObj.offset;
+                if (eObj.o.a1 == 4 || eObj.o.a1 == 2 || (eObj.o.a1 == 6 && 1 < eObj.o.bytes.size())) {
+                    while (this.pos < eObj.p2 && this.next()) {
+                        this.findB(eObj.o.bytes.get((int) (this.pos - p1a)));
+                    }
+
+                } else if (eObj.o.a1 == 6) {
+                    byte var17 = eObj.o.bytes.get(0);
+
+                    while (this.pos < eObj.p2 && this.next()) {
+                        boolean isPileEmpty = this.findB(var17);
+                        if (isPileEmpty && this.pos < eObj.p2 - (long) this.inCharsLength) {
+                            this.pos = eObj.p2 - (long) this.inCharsLength;
+                        }
+                    }
+                } else {
+                    for (long i = this.pos - p1a;
+                         ii < i;
+                         ii += in.skip(i - ii))
+                        ;
+
+                    while (this.pos < eObj.p2 && this.next()) {
+                        long i = eObj.p2 - this.pos;
+                        int n = in.read(bytes, 0, i < twoMiBL ? (int) i : twoMiB);
+                        if (n <= 0) {
+                            throw new IOException(n == 0 ? "Unable to access file" : "EOF");
+                        }
+
+                        ii += n;
+
+                        for (m = 0; m < n && this.next(); ++m) {
+                            this.findB(bytes[m]);
+                        }
+
+                        this.setJPBar();
+                    }
+                }
+
+                this.setJPBar();
+            }
+        } catch (Exception var16) {
+            System.err.printf("findT %s\n\t%s\n\t%d\t%d%n", var16, eObj, k, this.pos);
+        }
+
+        int length = this.ignoreCase ? this.realLength : this.inBytes.length;
+        int length2 = this.isFound ? length : 0;
+        this.hexV.find2(this.pos, this.pos - (long) length2);
     }
 
     protected void setJPBar() {
-        this.jPBar.setValue((int) (1.07374182E9F * ((float) this.pos / (float) this.virtualSize)));
-        this.jPBar.setString(
-                (float) ((int) ((float) this.pos / ((float) this.virtualSize / 1000.0F))) / 10.0F
-                        + "%");
+        final float oneGiBF = 1.07374182E9F;
+        float ratio = (float) this.pos / (float) this.virtualSize;
+        this.jPBar.setValue((int) (oneGiBF * ratio));
+
+        float ratio2 = (float) this.pos / ((float) this.virtualSize / 1000.0F);
+        this.jPBar.setString(((float) ((int) ratio2) / 10.0F) + "%");
     }
 
     private boolean next() {
         return !this.isFound && !Thread.currentThread().isInterrupted();
     }
 
-    private void findB(byte var1) {
-        int[] var6 = new int[4];
-        int var3;
-        int var4;
-        if (!this.ignoreCase) {
-            for (var3 = this.pile.size() - 1; -1 < var3; --var3) {
-                var4 = ((Integer) this.pile.get(var3)).intValue();
-                if (this.inBytes[var4] != var1) {
-                    this.pile.remove(var3);
-                } else {
-                    if (var4 + 1 >= this.inBytes.length) {
-                        this.isFound = true;
-                        break;
-                    }
+    private boolean findB(byte arg1) {
+        boolean isPileEmpty = this.ignoreCase
+            ? findBIgnoreCase(arg1)
+            : findBNoIgnoreCase(arg1);
 
-                    this.pile.set(var3, new Integer(var4 + 1));
-                }
+        ++this.pos;
+        return isPileEmpty;
+    }
+
+    private boolean findBNoIgnoreCase(byte arg1) {
+        for (int i = this.pile.size() - 1; 0 <= i; --i) {
+            int intElem = (Integer) this.pile.get(i);
+            if (this.inBytes[intElem] != arg1) {
+                this.pile.remove(i);
+                continue;
+            }
+            if (intElem + 1 >= this.inBytes.length) {
+                this.isFound = true;
+                break;
+            }
+            this.pile.set(i, intElem + 1);
+        }
+
+        if (arg1 == this.inBytes[0] && this.pos % (long) this.wordSize == 0L) {
+            this.pile.add(1);
+            if (this.inBytes.length == 1) {
+                this.isFound = true;
+            }
+        }
+
+        return this.pile.isEmpty();
+    }
+
+    private boolean findBIgnoreCase(byte arg1) {
+        int[] ints = new int[4];
+        for (int i = this.pile.size() - 1; 0 <= i; --i) {
+            ints = (int[]) this.pile.get(i);
+            ++ints[2];
+            ++ints[3];
+            if (this.inChars[ints[0]][ints[1]].length <= ints[2]) {
+                ++ints[0];
+                ints[1] = ints[2] = 0;
             }
 
-            if (var1 == this.inBytes[0] && this.pos % (long) this.wordSize == 0L) {
-                this.pile.add(new Integer(1));
-                if (this.inBytes.length == 1) {
+            if (this.inChars.length <= ints[0]) {
+                this.pile.remove(i);
+            } else if (arg1 == this.inChars[ints[0]][ints[1]][ints[2]]) {
+                this.pile.set(i, ints.clone());
+                if (ints[2] + 1 == this.inChars[ints[0]][ints[1]].length
+                    && ints[0] + 1 == this.inChars.length) {
                     this.isFound = true;
                 }
-            }
-        } else {
-            for (var3 = this.pile.size() - 1; -1 < var3; --var3) {
-                var6 = (int[]) ((int[]) this.pile.get(var3));
-                ++var6[2];
-                ++var6[3];
-                if (this.inChars[var6[0]][var6[1]].length <= var6[2]) {
-                    ++var6[0];
-                    var6[1] = var6[2] = 0;
-                }
+            } else {
+                for (int intElem = ints[1] + 1; intElem < this.inChars[ints[0]].length; ++intElem) {
+                    int var5;
+                    for (var5 = 0;
+                         var5 < ints[2]
+                             && var5 < this.inChars[ints[0]][intElem].length
+                             && this.inChars[ints[0]][intElem][var5]
+                             == this.inChars[ints[0]][ints[1]][var5];
+                         ++var5)
+                        ;
 
-                if (this.inChars.length <= var6[0]) {
-                    this.pile.remove(var3);
-                } else if (var1 == this.inChars[var6[0]][var6[1]][var6[2]]) {
-                    this.pile.set(var3, var6.clone());
-                    if (var6[2] + 1 == this.inChars[var6[0]][var6[1]].length
-                            && var6[0] + 1 == this.inChars.length) {
-                        this.isFound = true;
-                    }
-                } else {
-                    for (var4 = var6[1] + 1; var4 < this.inChars[var6[0]].length; ++var4) {
-                        int var5;
-                        for (var5 = 0;
-                                var5 < var6[2]
-                                        && var5 < this.inChars[var6[0]][var4].length
-                                        && this.inChars[var6[0]][var4][var5]
-                                                == this.inChars[var6[0]][var6[1]][var5];
-                                ++var5) {;
-                        }
-
-                        if (var5 < var6[2]) {
-                            this.pile.remove(var3);
-                            break;
-                        }
-
-                        if (var1 == this.inChars[var6[0]][var4][var5]) {
-                            var6[1] = var4;
-                            this.pile.set(var3, var6.clone());
-                            if (var6[2] + 1 == this.inChars[var6[0]][var6[1]].length
-                                    && var6[0] + 1 == this.inChars.length) {
-                                this.isFound = true;
-                            }
-                            break;
-                        }
-
-                        if (var4 + 1 == this.inChars[var6[0]].length) {
-                            this.pile.remove(var3);
-                            break;
-                        }
+                    if (var5 < ints[2]) {
+                        this.pile.remove(i);
+                        break;
                     }
 
-                    if (var6[0] + 1 == this.inChars.length
-                            && var6[1] + 1 == this.inChars[0].length
-                            && var6[2] + 1 == this.inChars[0][1].length) {
-                        this.pile.remove(var3);
-                    }
-                }
-
-                if (this.isFound) {
-                    this.realLength = var6[3];
-                    break;
-                }
-            }
-
-            if (this.pos % (long) this.wordSize == 0L) {
-                for (var3 = 0; var3 < this.inChars[0].length; ++var3) {
-                    if (var1 == this.inChars[0][var3][0]) {
-                        var6[0] = var6[2] = 0;
-                        var6[1] = var3;
-                        var6[3] = 1;
-                        this.pile.add(var6.clone());
-                        if (this.inChars.length + this.inChars[0][var3].length == 2) {
+                    if (arg1 == this.inChars[ints[0]][intElem][var5]) {
+                        ints[1] = intElem;
+                        this.pile.set(i, ints.clone());
+                        if (ints[2] + 1 == this.inChars[ints[0]][ints[1]].length
+                            && ints[0] + 1 == this.inChars.length) {
                             this.isFound = true;
-                            this.realLength = var6[3];
                         }
                         break;
                     }
+
+                    if (intElem + 1 == this.inChars[ints[0]].length) {
+                        this.pile.remove(i);
+                        break;
+                    }
+                }
+
+                if (ints[0] + 1 == this.inChars.length
+                    && ints[1] + 1 == this.inChars[0].length
+                    && ints[2] + 1 == this.inChars[0][1].length) {
+                    this.pile.remove(i);
+                }
+            }
+
+            if (this.isFound) {
+                this.realLength = ints[3];
+                break;
+            }
+        }
+
+        if (this.pos % (long) this.wordSize == 0L) {
+            for (int i = 0; i < this.inChars[0].length; ++i) {
+                if (arg1 == this.inChars[0][i][0]) {
+                    ints[0] = ints[2] = 0;
+                    ints[1] = i;
+                    ints[3] = 1;
+                    this.pile.add(ints.clone());
+                    if (this.inChars.length + this.inChars[0][i].length == 2) {
+                        this.isFound = true;
+                        this.realLength = ints[3];
+                    }
+                    break;
                 }
             }
         }
 
-        ++this.pos;
+        return this.pile.isEmpty();
     }
 }

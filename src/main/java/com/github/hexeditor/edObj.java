@@ -11,45 +11,27 @@ class edObj {
     public long size = 0L;
     public boolean isEditing = false;
     edObj o = null;
-    public Stack B = new Stack();
+    public Stack<Byte> bytes = new Stack<>();
 
-    public edObj(long var1, long var3, int var5) {
-        this.p1 = var1;
-        this.a1 = var5;
-        this.size = var3;
-        this.p2 = this.p1 + var3;
+    public edObj(long p1, long size, int a1) {
+        this.p1 = p1;
+        this.a1 = a1;
+        this.size = size;
+        this.p2 = this.p1 + size;
     }
 
-    public edObj(long var1, long var3, long var5, edObj var7) {
-        this.p1 = var1;
-        this.p2 = var3;
-        this.offset = var5;
-        this.o = var7;
+    public edObj(long p1, long p2, long offset, edObj obj) {
+        this.p1 = p1;
+        this.p2 = p2;
+        this.offset = offset;
+        this.o = obj;
     }
 
     public String toString() {
         return this.o != null
-                ? "p//offset: "
-                        + this.p1
-                        + "/"
-                        + this.p2
-                        + "//"
-                        + this.offset
-                        + "   \to.a1: "
-                        + this.o.a1
-                        + "   \to.B.size/o.size: "
-                        + this.o.B.size()
-                        + "/"
-                        + this.o.size
-                : "p: "
-                        + this.p1
-                        + "/"
-                        + this.p2
-                        + "   \ta1: "
-                        + this.a1
-                        + "   \tB.size/size: "
-                        + this.B.size()
-                        + "/"
-                        + this.size;
+            ? String.format("p//offset: %d/%d//%d   \to.a1: %d   \to.B.size/o.size: %d/%d",
+                this.p1, this.p2, this.offset, this.o.a1, this.o.bytes.size(), this.o.size)
+            : String.format("p: %d/%d   \ta1: %d   \tB.size/size: %d/%d",
+                this.p1, this.p2, this.a1, this.bytes.size(), this.size);
     }
 }

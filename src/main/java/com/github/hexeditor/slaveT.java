@@ -13,105 +13,114 @@ class slaveT extends Thread implements ActionListener {
 
     binEdit hexV;
     Timer timer = new Timer(300, this);
-    private BufferedReader bR;
+    private final BufferedReader bR;
 
     slaveT() {
         this.bR = new BufferedReader(new InputStreamReader(System.in));
     }
 
+    @Override
     public void run() {
         this.timer.addActionListener(this);
         this.timer.start();
     }
 
-    public void actionPerformed(ActionEvent var1) {
-        boolean var2 = true;
-        boolean var3 = false;
-        int var4 = 0;
-        int var5 = 0;
-        String var9 = null;
-        StringBuffer var11 = new StringBuffer();
-        Vector var12 = new Vector();
-        if (var1.getSource() == this.timer) {
-            this.timer.stop();
-
-            try {
-                if (!this.bR.ready()) {
-                    this.timer.setDelay(300);
-                } else {
-                    var9 = this.bR.readLine().replaceAll("  ", " ");
-                    this.timer.setDelay(50);
-                }
-            } catch (IOException var14) {;
-            }
-
-            if (var9 != null && 0 < var9.length()) {
-                for (; var5 < var9.length(); ++var5) {
-                    var2 = true;
-                    if (var9.charAt(var5) == 34) {
-                        var2 = !var2;
-                    } else if (var2 && var9.charAt(var5) == 32) {
-                        var12.add(var9.substring(var4, var5));
-                        var4 = var5 + 1;
-                    }
-                }
-
-                var12.add(var9.substring(var4, var5));
-                if (0 < var12.size()) {
-                    var9 = (String) var12.firstElement();
-                    if (var9.equals("-goto") && var12.size() == 2) {
-                        this.hexV.goTo((String) var12.elementAt(1));
-                    } else if ((var9.equals("-Mark")
-                                    || var9.equals("-mark")
-                                    || var9.equals("-delmark")
-                                    || var9.equals("-delMark"))
-                            && 1 < var12.size()) {
-                        for (var4 = 1; var4 < var12.size(); ++var4) {
-                            try {
-                                Long var8 = Long.valueOf((String) var12.elementAt(var4));
-                                if (var9.equals("-Mark") && !this.hexV.MarkV.contains(var8)) {
-                                    this.hexV.MarkV.add(var8);
-                                } else if (var9.equals("-mark")
-                                        && !this.hexV.markV.contains(var8)) {
-                                    this.hexV.markV.add(var8);
-                                } else if (var9.equals("-delMark")) {
-                                    this.hexV.MarkV.remove(var8);
-                                } else if (var9.equals("-delmark")) {
-                                    this.hexV.markV.remove(var8);
-                                }
-                            } catch (Exception var15) {;
-                            }
-                        }
-                    } else if (var9.equals("-file") && var12.size() == 2) {
-                        var9 = (String) var12.elementAt(1);
-                        if (var2 = (var9.length() & 3) == 0) {
-                            var4 = 0;
-
-                            while (var4 < var9.length() - 3 && var2) {
-                                long var6 = 0L;
-
-                                for (var5 = 0; var5 < 4 && var2; ++var5) {
-                                    char var16 = var9.charAt(var4);
-                                    var2 = 48 <= var16 && var16 <= 57 || 65 <= var16 && var16 <= 90;
-                                    var6 =
-                                            (var6 << 4)
-                                                    + (long) var16
-                                                    - (long) (48 <= var16 && var16 <= 57 ? 48 : 55);
-                                    ++var4;
-                                }
-
-                                var11.append((char) ((int) var6));
-                            }
-                        }
-
-                        this.hexV.loadFile(new File(var11.toString()));
-                    } else if (var9.equals("-close")) {
-                        this.hexV.closeFile();
-                    }
-                }
-            }
-
-            this.timer.restart();
+    @Override
+    public void actionPerformed(ActionEvent event) {
+        if (event.getSource() != this.timer) {
+            return;
         }
+
+        boolean isInString = true;
+        int j = 0;
+        int i = 0;
+        String line = null;
+        StringBuilder sb = new StringBuilder();
+        Vector<String> strings = new Vector<>();
+
+        this.timer.stop();
+
+        try {
+            if (!this.bR.ready()) {
+                this.timer.setDelay(300);
+            } else {
+                line = this.bR.readLine().replaceAll(" {2}", " ");
+                this.timer.setDelay(50);
+            }
+        } catch (IOException ignored) {
+        }
+
+        if (line == null || line.isEmpty()) {
+            this.timer.restart();
+            return;
+        }
+
+        for (; i < line.length(); ++i) {
+            isInString = true;
+            if (line.charAt(i) == '\"') {
+                isInString = !isInString;
+            } else if (isInString && line.charAt(i) == ' ') {
+                strings.add(line.substring(j, i));
+                j = i + 1;
+            }
+        }
+
+        strings.add(line.substring(j, i));
+        if (strings.isEmpty()) {
+            this.timer.restart();
+            return;
+        }
+
+        line = strings.firstElement();
+        if (line.equals("-goto") && strings.size() == 2) {
+            this.hexV.goTo(strings.elementAt(1));
+        } else if ((line.equals("-Mark")
+                        || line.equals("-mark")
+                        || line.equals("-delmark")
+                        || line.equals("-delMark"))
+                && 1 < strings.size()) {
+            for (j = 1; j < strings.size(); ++j) {
+                try {
+                    Long elem = Long.valueOf(strings.elementAt(j));
+                    if (line.equals("-Mark") && !this.hexV.MarkV.contains(elem)) {
+                        this.hexV.MarkV.add(elem);
+                    } else if (line.equals("-mark") && !this.hexV.markV.contains(elem)) {
+                        this.hexV.markV.add(elem);
+                    } else if (line.equals("-delMark")) {
+                        this.hexV.MarkV.remove(elem);
+                    } else if (line.equals("-delmark")) {
+                        this.hexV.markV.remove(elem);
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+        } else if (line.equals("-file") && strings.size() == 2) {
+            line = strings.elementAt(1);
+            isInString = (line.length() & 3) == 0;
+            if (isInString) {
+                j = 0;
+
+                while (j < line.length() - 3 && isInString) {
+                    long x = 0L;
+
+                    for (i = 0; i < 4 && isInString; ++i) {
+                        char c = line.charAt(j);
+                        isInString = ('0' <= c && c <= '9') || ('A' <= c && c <= 'Z');
+                        x = (x << 4)
+                            + (long) c
+                            - (long) ('0' <= c && c <= '9' ? '0' : '7');
+                        ++j;
+                    }
+
+                    sb.append((char) ((int) x));
+                }
+            }
+
+            this.hexV.loadFile(new File(sb.toString()));
+        } else if (line.equals("-close")) {
+            this.hexV.closeFile();
+        }
+
+        this.timer.restart();
     }
 }

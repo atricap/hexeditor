@@ -1,38 +1,20 @@
 package com.github.hexeditor;
 
-import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Dimension;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
-import java.awt.Insets;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.event.ItemEvent;
-import java.awt.event.ItemListener;
-import java.awt.event.MouseEvent;
-import java.awt.event.MouseListener;
+import java.awt.*;
+import java.awt.event.*;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.math.RoundingMode;
+import java.net.URL;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.util.Arrays;
 import java.util.Locale;
-import javax.swing.BorderFactory;
-import javax.swing.Box;
-import javax.swing.JButton;
-import javax.swing.JCheckBox;
-import javax.swing.JComboBox;
-import javax.swing.JComponent;
-import javax.swing.JLabel;
-import javax.swing.JMenu;
-import javax.swing.JMenuBar;
-import javax.swing.JMenuItem;
-import javax.swing.JPanel;
-import javax.swing.JProgressBar;
-import javax.swing.JTextField;
-import javax.swing.KeyStroke;
+import java.util.Objects;
+import java.util.function.Consumer;
+import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import javax.swing.event.CaretEvent;
 import javax.swing.event.CaretListener;
@@ -40,369 +22,424 @@ import javax.swing.event.CaretListener;
 public class binPanel extends JPanel
         implements ActionListener, ItemListener, CaretListener, MouseListener {
 
-    JTextField JTFile = new JTextField();
+    JTextField fileField = new JTextField();
     JProgressBar savePBar = new JProgressBar(0, 0, 0);
     JProgressBar findPBar = new JProgressBar(0, 0, 0);
     binEdit hexV;
-    JComponent help = this.help();
+    JComponent help = this.createHelp();
     boolean helpFlag = false;
     boolean cp437Available = false;
     boolean useFindChar = false;
-    JComboBox[] viewCBox = new JComboBox[2];
-    JTextField JTView = new JTextField();
-    JLabel JTsizes = new JLabel("");
+    JComboBox<String>[] viewComboBox = new JComboBox[2];
+    JTextField viewField = new JTextField();
+    JLabel bytesSelectedField = new JLabel("");
     byte[] selection;
-    JLabel fJL = new JLabel(" ");
-    JButton[] fJB = new JButton[2];
-    JComboBox[] fJCB = new JComboBox[4];
-    JTextField[] fJTF = new JTextField[2];
-    JCheckBox fJRB = new JCheckBox("Ignore case:");
-    JPanel jPBBP = new JPanel(new BorderLayout());
-    JPanel fP0 = new JPanel(new BorderLayout());
-    JPanel fP1 = this.findPanel();
-    JPanel stat = this.status();
+    JLabel findLabel = new JLabel(" ");
+    JButton[] findButtons = new JButton[2];
+    JComboBox[] findComboBoxes = new JComboBox[4];
+    JTextField[] findFields = new JTextField[2];
+    JCheckBox findCheckBoxIgnoreCase = new JCheckBox("Ignore case:");
+    JPanel progressBarPanel = new JPanel(new BorderLayout());
+    JPanel findPanel0 = new JPanel(new BorderLayout());
+    JPanel findPanel1 = this.findPanel();
+    JPanel stat = this.createStatusBar();
     JPanel frameFile;
     byte[] finByte;
     byte[] finByteU;
     byte[][][] findChar;
-    JMenuBar menuBar = new JMenuBar();
-    JMenu menu;
-    JMenuItem menuItem;
     boolean isApplet = false;
-    boolean hexOffset = true;
-    slaveT slave;
-    DecimalFormatSymbols dFS = new DecimalFormatSymbols();
-    DecimalFormat fForm = new DecimalFormat("#.##########E0");
-    DecimalFormat dForm = new DecimalFormat("#.###################E0");
+    boolean isHexOffset = true;
+    slaveT slaveThread;
+    DecimalFormatSymbols decimalFormatSymbols = new DecimalFormatSymbols();
+    DecimalFormat floatFormat = new DecimalFormat("#.##########E0");
+    DecimalFormat doubleFormat = new DecimalFormat("#.###################E0");
 
-    public binPanel(boolean var1, String[] var2) {
-        this.isApplet = var1;
+    public static binPanel createInstance(boolean isApplet, boolean isSlave, String fileName, Consumer<JMenuBar> onMenuCreated) {
+        return new binPanel(isApplet, isSlave, fileName, onMenuCreated);
+    }
+
+    public binPanel(boolean isApplet, boolean isSlave, String fileName, Consumer<JMenuBar> onMenuCreated) {
+        this.isApplet = isApplet;
+
+        onMenuCreated.accept(createMenuBar());
         this.setLayout(new BorderLayout());
-        String[][] var5 =
-                new String[][] {
-                    {"File", "Open", "Save as ", "Close file (Q)", "Screen to Png"},
-                    {
-                        "Edit",
-                        "Select All",
-                        "Undo (Z)",
-                        "Redo (Y)",
-                        "Cut (X)",
-                        "Copy",
-                        "Paste (V)",
-                        "Find",
-                        "Insert (before)",
-                        "Delete"
-                    },
-                    {
-                        "View",
-                        "Goto",
-                        "Toggle position Mark",
-                        "Down to next mark",
-                        "Up to previous mark ",
-                        "Toggle caret ",
-                        "Higher fontSize",
-                        "Lower fontSize",
-                        "Black/White background"
-                    },
-                    {"hidden", "Font +", "Font -"},
-                    {"Help", "Toggle help"}
-                };
-        int[][] var6 =
+        this.frameFile = this.createFramePanel(isSlave, fileName);
+        this.add(this.frameFile);
+        this.decimalFormatSymbols.setDecimalSeparator('.');
+        this.floatFormat.setDecimalFormatSymbols(this.decimalFormatSymbols);
+        this.doubleFormat.setDecimalFormatSymbols(this.decimalFormatSymbols);
+    }
+
+    private JMenuBar createMenuBar() {
+        String[][] titles = new String[][]{
+                {
+                    "File",
+                    "Open",
+                    "Save as ",
+                    "Close file (Q)",
+                    "Screen to Png"},
+                {
+                    "Edit",
+                    "Select All",
+                    "Undo (Z)",
+                    "Redo (Y)",
+                    "Cut (X)",
+                    "Copy",
+                    "Paste (V)",
+                    "Find",
+                    "Insert (before)",
+                    "Delete"
+                },
+                {
+                    "View",
+                    "Goto",
+                    "Toggle position Mark",
+                    "Down to next mark",
+                    "Up to previous mark ",
+                    "Toggle caret ",
+                    "Higher fontSize",
+                    "Lower fontSize",
+                    "Black/White background"
+                },
+                {
+                    "hidden",
+                    "Font +",
+                    "Font -"
+                },
+                {
+                    "Help",
+                    "Toggle help"
+                }
+            };
+        int[][] keyCodes =
                 new int[][] {
-                    {70, 79, 83, 81, 80},
-                    {69, 65, 90, 89, 88, 67, 86, 70, 155, 127},
-                    {86, 71, 77, 68, 85, 84, 107, 109, 87},
-                    {178, 521, 45},
-                    {72, 72}
+                    {KeyEvent.VK_F, KeyEvent.VK_O, KeyEvent.VK_S, KeyEvent.VK_Q, KeyEvent.VK_P},
+                    {KeyEvent.VK_E, KeyEvent.VK_A, KeyEvent.VK_Z, KeyEvent.VK_Y, KeyEvent.VK_X, KeyEvent.VK_C,
+                        KeyEvent.VK_V, KeyEvent.VK_F, KeyEvent.VK_INSERT, KeyEvent.VK_DELETE},
+                    {KeyEvent.VK_V, KeyEvent.VK_G, KeyEvent.VK_M, KeyEvent.VK_D, KeyEvent.VK_U, KeyEvent.VK_T,
+                        KeyEvent.VK_ADD, KeyEvent.VK_SUBTRACT, KeyEvent.VK_W},
+                    {0xb2, KeyEvent.VK_PLUS, KeyEvent.VK_MINUS},
+                    {KeyEvent.VK_H, KeyEvent.VK_H}
                 };
-        int[][] var7 =
+        int[][] mnemonics =
                 new int[][] {
-                    {70, 79, 83, 81, 80},
-                    {69, 65, 90, 89, 88, 67, 86, 70, 73, 68},
-                    {86, 71, 77, 68, 85, 84, 72, 76, 87},
-                    {72, 43, 45},
-                    {72, 72}
+                    {KeyEvent.VK_F, KeyEvent.VK_O, KeyEvent.VK_S, KeyEvent.VK_Q, KeyEvent.VK_P},
+                    {KeyEvent.VK_E, KeyEvent.VK_A, KeyEvent.VK_Z, KeyEvent.VK_Y, KeyEvent.VK_X, KeyEvent.VK_C,
+                        KeyEvent.VK_V, KeyEvent.VK_F, KeyEvent.VK_I, KeyEvent.VK_D},
+                    {KeyEvent.VK_V, KeyEvent.VK_G, KeyEvent.VK_M, KeyEvent.VK_D, KeyEvent.VK_U, KeyEvent.VK_T,
+                        KeyEvent.VK_H, KeyEvent.VK_L, KeyEvent.VK_W},
+                    {KeyEvent.VK_H, '+', KeyEvent.VK_MINUS},
+                    {KeyEvent.VK_H, KeyEvent.VK_H}
                 };
-        int[][] var8 =
+        int[][] modifiers =
                 new int[][] {
-                    {0, 2, 2, 2, 2},
-                    {0, 2, 2, 2, 2, 2, 2, 2, 0, 0},
-                    {0, 2, 2, 2, 2, 2, 2, 2, 2},
-                    {0, 2, 2},
-                    {0, 2}
+                    {0, InputEvent.CTRL_MASK, InputEvent.CTRL_MASK, InputEvent.CTRL_MASK, InputEvent.CTRL_MASK},
+                    {0, InputEvent.CTRL_MASK, InputEvent.CTRL_MASK, InputEvent.CTRL_MASK, InputEvent.CTRL_MASK,
+                        InputEvent.CTRL_MASK, InputEvent.CTRL_MASK, InputEvent.CTRL_MASK, 0, 0},
+                    {0, InputEvent.CTRL_MASK, InputEvent.CTRL_MASK, InputEvent.CTRL_MASK, InputEvent.CTRL_MASK,
+                        InputEvent.CTRL_MASK, InputEvent.CTRL_MASK, InputEvent.CTRL_MASK, InputEvent.CTRL_MASK},
+                    {0, InputEvent.CTRL_MASK, InputEvent.CTRL_MASK},
+                    {0, InputEvent.CTRL_MASK}
                 };
 
-        for (int var3 = 0; var3 < var5.length; ++var3) {
-            (this.menu = new JMenu(var5[var3][0])).setMnemonic(var7[var3][0]);
-            if (var3 != 0 || !var1) {
-                for (int var4 = 1; var4 < var5[var3].length; ++var4) {
-                    this.menuItem = new JMenuItem(var5[var3][var4], var7[var3][var4]);
-                    if (var3 != 4) {
-                        this.menuItem.setAccelerator(
-                                KeyStroke.getKeyStroke(var6[var3][var4], var8[var3][var4]));
+        JMenuBar menuBar = new JMenuBar();
+        for (int i = 0; i < titles.length; ++i) {
+            JMenu menu = new JMenu(titles[i][0]);
+            menu.setMnemonic(mnemonics[i][0]);
+
+            if (i != 0 || !this.isApplet) { // no file menu for applets
+                for (int j = 1; j < titles[i].length; ++j) {
+                    JMenuItem menuItem = new JMenuItem(titles[i][j], mnemonics[i][j]);
+                    if (i != 4) {
+                        menuItem.setAccelerator(
+                                KeyStroke.getKeyStroke(keyCodes[i][j], modifiers[i][j]));
                     }
 
-                    this.menuItem.addActionListener(this);
-                    this.menu.add(this.menuItem);
-                    if (var3 == 1 && (var4 == 1 || var4 == 3 || var4 == 6 || var4 == 7)
-                            || var3 == 2 && (var4 == 1 || var4 == 4 || var4 == 5 || var4 == 7)) {
-                        this.menu.addSeparator();
+                    menuItem.addActionListener(this);
+                    menu.add(menuItem);
+                    if (i == 1 && (j == 1 || j == 3 || j == 6 || j == 7)
+                            || i == 2 && (j == 1 || j == 4 || j == 5 || j == 7)) {
+                        menu.addSeparator();
                     }
                 }
             }
 
-            if (var3 != 3) {
-                this.menuBar.add(this.menu);
+            if (i != 3) { // no view menu
+                menuBar.add(menu);
             }
         }
 
-        UI.jRP.setJMenuBar(this.menuBar);
-        this.add(this.frameFile = this.frame(var2));
-        this.dFS.setDecimalSeparator('.');
-        this.fForm.setDecimalFormatSymbols(this.dFS);
-        this.dForm.setDecimalFormatSymbols(this.dFS);
+        return menuBar;
     }
 
-    private JPanel frame(String[] var1) {
+    private JPanel createFramePanel(boolean isSlave, String fileName) {
         this.savePBar.setStringPainted(true);
         this.savePBar.setString("");
-        this.JTView.setEditable(false);
-        JPanel var2 = new JPanel(new GridBagLayout());
-        GridBagConstraints var3 = new GridBagConstraints();
-        var3.fill = 2;
-        var3.weightx = 1.0D;
-        var3.gridx = var3.gridy = 0;
-        this.JTFile.setEditable(false);
-        var2.add(this.JTFile, var3);
-        ++var3.gridy;
-        var2.add(this.jPBBP, var3);
-        ++var3.gridy;
-        var2.add(this.fP0, var3);
-        ++var3.gridy;
-        var2.add(Box.createVerticalStrut(3), var3);
-        var3.fill = 1;
-        var3.weighty = 1.0D;
-        ++var3.gridy;
-        var2.add(this.hexV = new binEdit(this, this.isApplet), var3);
-        var3.fill = 2;
-        var3.weighty = 0.0D;
-        ++var3.gridy;
-        var2.add(this.stat, var3);
-        this.fJCB[2].setSelectedIndex(6);
-        if (var1 != null && 0 < var1.length) {
-            if (var1[0].equals("-slave")) {
-                (this.slave = new slaveT()).setDaemon(true);
-                this.slave.hexV = this.hexV;
-                this.slave.start();
-            } else {
-                this.hexV.loadFile(new java.io.File(var1[0]));
-            }
+        this.viewField.setEditable(false);
+
+        JPanel panel = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0D;
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        this.fileField.setEditable(false);
+        panel.add(this.fileField, gbc);
+
+        ++gbc.gridy;
+        panel.add(this.progressBarPanel, gbc);
+
+        ++gbc.gridy;
+        panel.add(this.findPanel0, gbc);
+
+        ++gbc.gridy;
+        panel.add(Box.createVerticalStrut(3), gbc);
+
+        gbc.fill = 1;
+        gbc.weighty = 1.0D;
+        ++gbc.gridy;
+        this.hexV = new binEdit(this, this.isApplet);
+        panel.add(this.hexV, gbc);
+
+        gbc.fill = 2;
+        gbc.weighty = 0.0D;
+        ++gbc.gridy;
+        panel.add(this.stat, gbc);
+
+        this.findComboBoxes[2].setSelectedIndex(6);
+
+        if (isSlave) {
+            this.slaveThread = new slaveT();
+            this.slaveThread.setDaemon(true);
+            this.slaveThread.hexV = this.hexV;
+            this.slaveThread.start();
+        } else if (fileName != null) {
+            this.hexV.loadFile(new java.io.File(fileName));
         }
 
-        return var2;
+        return panel;
     }
 
-    public JComponent help() {
-        jEP var1 = new jEP((String) null, false);
-        var1.setContentType("text/html");
-        String var2 = Locale.getDefault().getLanguage();
-        var2 = "ReadMe" + Character.toUpperCase(var2.charAt(0)) + var2.charAt(1) + ".htm";
+    public JComponent createHelp() {
+        jEP editor = new jEP(null, false);
+        editor.setContentType("text/html");
 
+        String lang = Locale.getDefault().getLanguage();
+        String langTitleCase = "" + Character.toUpperCase(lang.charAt(0)) + lang.charAt(1);
+        String readMe = String.format("ReadMe%s.htm", langTitleCase);
         try {
-            var1.eP
-                    .getEditorKit()
-                    .read(
-                            UI.class
-                                    .getResource(
-                                            UI.class.getResource(var2) == null
-                                                    ? "ReadMeEn.htm"
-                                                    : var2)
-                                    .openStream(),
-                            var1.eP.getDocument(),
-                            0);
-            var1.eP
-                    .getEditorKit()
-                    .read(
-                            UI.class.getResource("shortKey.htm").openStream(),
-                            var1.eP.getDocument(),
-                            var1.eP.getDocument().getLength());
-        } catch (Exception var4) {;
+            String readMe2 = UI.class.getResource(readMe) != null ? readMe : "ReadMeEn.htm";
+            URL readMeR = Objects.requireNonNull(UI.class.getResource(readMe2),
+                String.format("%s not found!", readMe2));
+            editor.editor.getEditorKit().read(
+                readMeR.openStream(),
+                editor.editor.getDocument(),
+                0);
+
+            String shortKey = "shortKey.htm";
+            URL shortKeyR = Objects.requireNonNull(UI.class.getResource(shortKey),
+                String.format("%s not found!", shortKey));
+            editor.editor.getEditorKit().read(
+                shortKeyR.openStream(),
+                editor.editor.getDocument(),
+                editor.editor.getDocument().getLength());
+        } catch (Exception ignored) {
         }
 
-        return var1;
+        return editor;
     }
 
     private JPanel findPanel() {
-        String[][] var3 =
-                new String[][] {
-                    {"BE", "LE"},
-                    {"Signed", "Unsigned"},
-                    {
-                        "Short (16)",
-                        "Int (32)",
-                        "Long (64)",
-                        "Float (32)",
-                        "Double (64)",
-                        "Hexa",
-                        "ISO/CEI 8859-1",
-                        "UTF-8",
-                        "UTF-16"
-                    },
-                    {"8 bits", "16 bits", "32 bits", "64 bits", "128 bits"},
-                    {
-                        "<html>Big-indian (natural order) or<br>Little-indian (Intel order).",
-                        "Only for integer",
-                        "Data type",
-                        "<html>Select \'64\' if you search a machine instruction for a 64 bits processor.<br>If you don\'t know, left it at \'8\'."
-                    },
-                    {"BE", "Unsigned", "ISO/CEI 8859-1", "128 bits"},
-                    {"Next", "Hide"}
-                };
-        JPanel var4 = new JPanel(new GridBagLayout());
-        JPanel var5 = new JPanel(new GridBagLayout());
-        JPanel var6 = new JPanel(new GridBagLayout());
-        var4.setBorder(BorderFactory.createTitledBorder("Find:"));
-        ((TitledBorder) var4.getBorder()).setTitleColor(Color.blue);
-        GridBagConstraints var7 = new GridBagConstraints();
-        var7.anchor = 21;
-        var4.add(var5, var7);
-        var7.fill = 2;
-        ++var7.gridx;
-        var4.add(var6, var7);
+        final String[][] items = {
+            {"BE", "LE"},
+            {"Signed", "Unsigned"},
+            {
+                "Short (16)",
+                "Int (32)",
+                "Long (64)",
+                "Float (32)",
+                "Double (64)",
+                "Hexa",
+                "ISO/CEI 8859-1",
+                "UTF-8",
+                "UTF-16"
+            },
+            {"8 bits", "16 bits", "32 bits", "64 bits", "128 bits"}
+        };
+        final String[] toolTips = {
+            "<html>Big-indian (natural order) or<br>Little-indian (Intel order).",
+            "Only for integer",
+            "Data type",
+            "<html>Select '64' if you search a machine instruction for a 64 bits processor.<br>If you don't know, left it at '8'."
+        };
+        final String[] prototypeDisplayValues = {"BE", "Unsigned", "ISO/CEI 8859-1", "128 bits"};
+        final String[] buttonTitles = {"Next", "Hide"};
+
+        JPanel outerPanel = new JPanel(new GridBagLayout());
+        JPanel line1 = new JPanel(new GridBagLayout());
+        JPanel line2 = new JPanel(new GridBagLayout());
+
+        TitledBorder outerBorder = BorderFactory.createTitledBorder("Find");
+        outerBorder.setTitleColor(Color.blue);
+        outerPanel.setBorder(outerBorder);
+
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.anchor = GridBagConstraints.LINE_START;
+        outerPanel.add(line1, gbc);
+
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        ++gbc.gridx;
+        outerPanel.add(line2, gbc);
+
         this.findPBar.setStringPainted(true);
-        var4.add(this.findPBar, var7);
-        var5.add(this.fJTF[0] = new JTextField());
-        this.fJTF[0].addCaretListener(this);
-        var5.add(new JLabel("  "));
-        var5.add(this.fJL);
+        outerPanel.add(this.findPBar, gbc);
 
-        int var1;
-        for (var1 = 0; var1 < this.fJCB.length; ++var1) {
-            this.fJCB[var1] = new JComboBox();
-            this.fJCB[var1].setPrototypeDisplayValue(var3[5][var1]);
-            this.fJCB[var1].setToolTipText(var3[4][var1]);
+        this.findFields[0] = new JTextField();
+        this.findFields[0].addCaretListener(this);
+        line1.add(this.findFields[0]);
+        line1.add(new JLabel("  "));
+        line1.add(this.findLabel);
 
-            for (int var2 = 0; var2 < var3[var1].length; ++var2) {
-                this.fJCB[var1].addItem(var3[var1][var2]);
+        for (int i = 0; i < this.findComboBoxes.length; ++i) {
+            this.findComboBoxes[i] = new JComboBox<>();
+            this.findComboBoxes[i].setPrototypeDisplayValue(prototypeDisplayValues[i]);
+            this.findComboBoxes[i].setToolTipText(toolTips[i]);
+
+            for (int j = 0; j < items[i].length; ++j) {
+                this.findComboBoxes[i].addItem(items[i][j]);
             }
 
-            this.fJCB[var1].addItemListener(this);
-            var6.add(this.fJCB[var1]);
+            this.findComboBoxes[i].addItemListener(this);
+            line2.add(this.findComboBoxes[i]);
         }
 
-        this.fJRB.setHorizontalTextPosition(2);
-        this.fJRB.setMargin(new Insets(0, 1, 0, 1));
-        this.fJRB.addActionListener(this);
-        var6.add(this.fJRB);
-        this.fJTF[0].setPreferredSize(
-                new Dimension(
-                        this.fJCB[0].getPreferredSize().width
-                                + this.fJCB[1].getPreferredSize().width
-                                + this.fJCB[2].getPreferredSize().width
-                                + this.fJCB[3].getPreferredSize().width,
-                        this.fJTF[0].getPreferredSize().height));
-        var6.add(Box.createHorizontalGlue());
-        var6.add(new JLabel("   From:"));
-        var6.add(this.fJTF[1] = new JTextField(15));
+        this.findCheckBoxIgnoreCase.setHorizontalTextPosition(SwingConstants.LEFT);
+        this.findCheckBoxIgnoreCase.setMargin(new Insets(0, 1, 0, 1));
+        this.findCheckBoxIgnoreCase.addActionListener(this);
+        line2.add(this.findCheckBoxIgnoreCase);
+        this.findFields[0].setPreferredSize(
+            new Dimension(
+                this.findComboBoxes[0].getPreferredSize().width
+                    + this.findComboBoxes[1].getPreferredSize().width
+                    + this.findComboBoxes[2].getPreferredSize().width
+                    + this.findComboBoxes[3].getPreferredSize().width,
+                this.findFields[0].getPreferredSize().height));
+        line2.add(Box.createHorizontalGlue());
+        line2.add(new JLabel("   From:"));
+        line2.add(this.findFields[1] = new JTextField(15));
 
-        for (var1 = 0; var1 < this.fJB.length; ++var1) {
-            this.fJB[var1] = new JButton(var3[6][var1]);
-            this.fJB[var1].setMargin(new Insets(3, 2, 3, 2));
-            this.fJB[var1].addActionListener(this);
-            var6.add(this.fJB[var1]);
+        for (int i = 0; i < this.findButtons.length; ++i) {
+            this.findButtons[i] = new JButton(buttonTitles[i]);
+            this.findButtons[i].setMargin(new Insets(3, 2, 3, 2));
+            this.findButtons[i].addActionListener(this);
+            line2.add(this.findButtons[i]);
         }
 
-        return var4;
+        return outerPanel;
     }
 
-    private JPanel status() {
-        String[][] var1 =
-                new String[][] {
-                    {"BE", "LE "},
-                    {
-                        "Binary",
-                        "Byte, signed/unsigned    ",
-                        "Short (16), signed",
-                        "Short (16), unsigned",
-                        "Int (32), signed",
-                        "Int (32), unsigned",
-                        "Long (64), signed",
-                        "Long (64), unsigned",
-                        "Float (32)",
-                        "Double (64)",
-                        "DOS-US/OEM-US/cp437",
-                        "UTF-8",
-                        "UTF-16"
-                    },
-                    {
-                        "<html>Big-Endian (natural order) or little-Endian (Intel order).",
-                        "<html>Conversion rule for the data following the caret (shown here after)."
-                    }
-                };
+    private JPanel createStatusBar() {
+        String[][] defs = new String[][] {
+            { // this.viewComboBox[0]
+                "BE",
+                "LE "
+            },
+            { // this.viewComboBox[1]
+                "Binary",
+                "Byte, signed/unsigned    ",
+                "Short (16), signed",
+                "Short (16), unsigned",
+                "Int (32), signed",
+                "Int (32), unsigned",
+                "Long (64), signed",
+                "Long (64), unsigned",
+                "Float (32)",
+                "Double (64)",
+                "DOS-US/OEM-US/cp437",
+                "UTF-8",
+                "UTF-16"
+            }
+        };
+        String[] toolTips = {
+            "<html>Big-Endian (natural order) or little-Endian (Intel order).",
+            "<html>Conversion rule for the data following the caret (shown here after)."
+        };
 
         try {
-            if (!(this.cp437Available = Charset.isSupported("cp437"))) {
-                var1[1][10] = "ISO/CEI 8859-1";
+            this.cp437Available = Charset.isSupported("cp437");
+            if (!this.cp437Available) {
+                defs[1][10] = "ISO/CEI 8859-1";
             }
-        } catch (Exception var6) {;
+        } catch (Exception ignored) {
         }
 
-        JPanel var4 = new JPanel(new GridBagLayout());
-        var4.setBorder(BorderFactory.createEmptyBorder(2, 0, 0, 0));
-        GridBagConstraints var5 = new GridBagConstraints();
-        var5.fill = 1;
-        var5.insets = new Insets(0, 0, 0, 0);
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBorder(BorderFactory.createEmptyBorder(2, 0, 0, 0));
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.fill = GridBagConstraints.BOTH;
+        gbc.insets = new Insets(0, 0, 0, 0);
 
-        for (int var2 = 0; var2 < this.viewCBox.length; ++var2) {
-            this.viewCBox[var2] = new JComboBox();
-            this.viewCBox[var2].setPrototypeDisplayValue(var1[var2][1]);
-            this.viewCBox[var2].setToolTipText(var1[2][var2]);
+        for (int cb = 0; cb < this.viewComboBox.length; ++cb) {
+            JComboBox<String> box = this.viewComboBox[cb] = new JComboBox<>();
+            box.setPrototypeDisplayValue(defs[cb][1]);
+            box.setToolTipText(toolTips[cb]);
 
-            for (int var3 = 0; var3 < var1[var2].length; ++var3) {
-                this.viewCBox[var2].addItem(var1[var2][var3]);
+            for (String item : defs[cb]) {
+                box.addItem(item);
             }
 
-            ++var5.gridx;
-            var4.add(this.viewCBox[var2], var5);
+            ++gbc.gridx;
+            panel.add(box, gbc);
         }
 
-        this.viewCBox[1].setSelectedIndex(1);
-        var5.weightx = 1.0D;
-        ++var5.gridx;
-        this.JTView.setPreferredSize(
+        this.viewComboBox[1].setSelectedIndex(1);
+
+        gbc.weightx = 1.0D;
+        ++gbc.gridx;
+        this.viewField.setPreferredSize(
                 new Dimension(
-                        this.JTView.getPreferredSize().width,
-                        this.viewCBox[0].getMinimumSize().height));
-        var4.add(this.JTView, var5);
-        var5.weightx = 0.0D;
-        ++var5.gridx;
-        var4.add(Box.createHorizontalStrut(3), var5);
-        ++var5.gridx;
-        var4.add(this.JTsizes, var5);
-        ++var5.gridx;
-        var4.add(Box.createHorizontalStrut(3), var5);
-        this.viewCBox[0].addItemListener(this);
-        this.viewCBox[1].addItemListener(this);
-        this.JTsizes.addMouseListener(this);
-        return var4;
+                        this.viewField.getPreferredSize().width,
+                        this.viewComboBox[0].getMinimumSize().height));
+        panel.add(this.viewField, gbc);
+
+        gbc.weightx = 0.0D;
+        ++gbc.gridx;
+        panel.add(Box.createHorizontalStrut(3), gbc);
+
+        ++gbc.gridx;
+        panel.add(this.bytesSelectedField, gbc);
+
+        ++gbc.gridx;
+        panel.add(Box.createHorizontalStrut(3), gbc);
+
+        this.viewComboBox[0].addItemListener(this);
+        this.viewComboBox[1].addItemListener(this);
+        this.bytesSelectedField.addMouseListener(this);
+
+        return panel;
     }
 
-    public void actionPerformed(ActionEvent var1) {
-        if (var1.getSource() == this.fJRB) {
+    @Override
+    public void actionPerformed(ActionEvent event) {
+        if (event.getSource() == this.findCheckBoxIgnoreCase) {
             this.checkFindEntry();
-        } else if (var1.getSource() == this.fJB[0] && this.fJB[0].getText() == "Next") {
+
+        } else if (event.getSource() == this.findButtons[0] && "Next".equals(this.findButtons[0].getText())) {
             this.hexV.find1();
-        } else if (var1.getSource() == this.fJB[0] && this.fJB[0].getText() == "Stop") {
-            this.hexV.find.interrupt();
-        } else if (var1.getSource() == this.fJB[1]) {
-            this.fP0.removeAll();
+
+        } else if (event.getSource() == this.findButtons[0] && "Stop".equals(this.findButtons[0].getText())) {
+            this.hexV.findThread.interrupt();
+
+        } else if (event.getSource() == this.findButtons[1]) {
+            this.findPanel0.removeAll();
             this.validate();
             this.repaint();
             this.hexV.slideScr(-1L, false);
-        } else if (var1.getSource().getClass().isInstance(new JMenuItem())) {
-            boolean var2 =
-                    ((JMenuItem) ((JMenuItem) var1.getSource())).getText().equals("Toggle help");
-            if (var2 || this.helpFlag) {
+
+        } else if (event.getSource().getClass().isInstance(new JMenuItem())) {
+            JMenuItem menuItem = (JMenuItem) event.getSource();
+            boolean isToggleHelp = menuItem.getText().equals("Toggle help");
+            if (isToggleHelp || this.helpFlag) {
                 this.removeAll();
                 if (this.helpFlag) {
                     this.add(this.frameFile);
@@ -414,37 +451,39 @@ public class binPanel extends JPanel
                 this.repaint();
             }
 
-            this.helpFlag = !this.helpFlag && var2;
-            if (!var2) {
-                this.hexV.KeyFromMenu(((JMenuItem) var1.getSource()).getAccelerator().getKeyCode());
+            this.helpFlag = !this.helpFlag && isToggleHelp;
+            if (!isToggleHelp) {
+                this.hexV.KeyFromMenu(menuItem.getAccelerator().getKeyCode());
             }
         }
     }
 
-    public void itemStateChanged(ItemEvent var1) {
-        if (var1.getSource() != this.viewCBox[0] && var1.getSource() != this.viewCBox[1]) {
-            if (var1.getSource() == this.fJCB[2]) {
-                int var2 = this.fJCB[2].getSelectedIndex();
-                this.fJCB[0].setEnabled(var2 < 5 || var2 == 8);
-                this.fJCB[1].setEnabled(var2 < 3);
-                this.fJRB.setEnabled(5 < var2);
-            }
-
-            this.checkFindEntry();
-        } else {
+    @Override
+    public void itemStateChanged(ItemEvent event) {
+        if (event.getSource() == this.viewComboBox[0] || event.getSource() == this.viewComboBox[1]) {
             this.hexV.rePaint();
+            return;
         }
-    }
+        if (event.getSource() == this.findComboBoxes[2]) {
+            int selectedIndex = this.findComboBoxes[2].getSelectedIndex();
+            this.findComboBoxes[0].setEnabled(selectedIndex < 5 || selectedIndex == 8);
+            this.findComboBoxes[1].setEnabled(selectedIndex < 3);
+            this.findCheckBoxIgnoreCase.setEnabled(5 < selectedIndex);
+        }
 
-    public void caretUpdate(CaretEvent var1) {
         this.checkFindEntry();
     }
 
-    protected void saveRunning(boolean var1) {
-        if (var1) {
-            this.jPBBP.add(this.savePBar);
+    @Override
+    public void caretUpdate(CaretEvent event) {
+        this.checkFindEntry();
+    }
+
+    protected void saveRunning(boolean isShowSavePBar) {
+        if (isShowSavePBar) {
+            this.progressBarPanel.add(this.savePBar);
         } else {
-            this.jPBBP.removeAll();
+            this.progressBarPanel.removeAll();
         }
 
         this.savePBar.setValue(0);
@@ -454,415 +493,391 @@ public class binPanel extends JPanel
 
     protected void find() {
         this.findPBar.setString("");
-        this.fP0.add(this.fP1, "West");
+        this.findPanel0.add(this.findPanel1, "West");
         this.validate();
         this.repaint();
     }
 
-    protected void findRunning(boolean var1) {
-        boolean var2 = false;
-        this.fJB[0].setText(var1 ? "Stop" : "Next");
-        this.fJB[1].setEnabled(!var1);
+    protected void findRunning(boolean isStop) {
+        this.findButtons[0].setText(isStop ? "Stop" : "Next");
+        this.findButtons[1].setEnabled(!isStop);
         this.findPBar.setValue(0);
-        if (!var1) {
+        if (!isStop) {
             this.findPBar.setString("");
         }
     }
 
     private void checkFindEntry() {
-        boolean var1 = false;
+        boolean flag1 = false;
         BigDecimal var3 = null;
         double var11 = 0.0D;
         float var14 = 0.0F;
-        long var15 = System.currentTimeMillis();
+        long time = System.currentTimeMillis();
         long[] var17 = new long[2];
-        StringBuffer var18 = new StringBuffer(220);
-        var18.append("<html>");
+        StringBuilder sb = new StringBuilder(220);
+        sb.append("<html>");
 
-        while (System.currentTimeMillis() < var15 + 50L) {;
+        while (System.currentTimeMillis() < time + 50L)
+            ; // Busy wait
+
+        String findText = this.findFields[0].getText();
+        String findTextSub = null;
+        int jj = findText.length();
+        int selectedIndex = this.findComboBoxes[2].getSelectedIndex();
+        this.useFindChar = this.findCheckBoxIgnoreCase.isSelected() && 5 < selectedIndex;
+        if (jj == 0) {
+            this.findLabel.setText(" ");
+            return;
         }
 
-        String var19 = this.fJTF[0].getText();
-        String var20 = null;
-        int var21 = var19.length();
-        int var22 = this.fJCB[2].getSelectedIndex();
-        boolean var24 = false;
-        boolean var25 = false;
-        this.useFindChar = this.fJRB.isSelected() && 5 < var22;
-        if (var21 == 0) {
-            this.fJL.setText(" ");
-        } else {
-            int var32;
-            int var23;
-            if (var22 < 5
-                    && !var19.startsWith("0x")
-                    && !var19.startsWith("Ox")
-                    && !var19.startsWith("ox")) {
-                if (var19.charAt(0) == 45 && this.fJCB[1].getSelectedIndex() == 1 && var22 < 3) {
-                    this.fJL.setText(
-                            "<html><FONT color=red>Input must be positive for unsigned integer.</FONT>");
-                    return;
-                }
+        int ii;
+        if (selectedIndex < 5
+                && !findText.startsWith("0x")
+                && !findText.startsWith("Ox")
+                && !findText.startsWith("ox")) {
+            if (findText.charAt(0) == '-'
+                    && this.findComboBoxes[1].getSelectedIndex() == 1 && selectedIndex < 3) {
+                this.findLabel.setText(
+                        "<html><FONT color=red>Input must be positive for unsigned integer.</FONT>");
+                return;
+            }
 
-                if (var19.equals("-") || var19.equals("+")) {
-                    this.fJL.setText(" ");
-                    return;
-                }
+            if (findText.equals("-") || findText.equals("+")) {
+                this.findLabel.setText(" ");
+                return;
+            }
 
-                BigDecimal var4 =
-                        var22 == 0
-                                ? BigDecimal.valueOf(-32768L)
-                                : (var22 == 1
-                                        ? BigDecimal.valueOf(-2147483648L)
-                                        : (var22 == 2
-                                                ? BigDecimal.valueOf(Long.MIN_VALUE)
-                                                : (var22 == 3
-                                                        ? BigDecimal.valueOf(
-                                                                -3.4028234663852886E38D)
-                                                        : BigDecimal.valueOf(
-                                                                -1.7976931348623157E308D))));
-                BigDecimal var5;
-                if (2 < var22) {
-                    var5 =
-                            var22 == 3
-                                    ? BigDecimal.valueOf(3.4028234663852886E38D)
-                                    : BigDecimal.valueOf(Double.MAX_VALUE);
-                } else if (this.fJCB[1].getSelectedIndex() == 0) {
-                    var5 =
-                            var22 == 0
-                                    ? BigDecimal.valueOf(32767L)
-                                    : (var22 == 1
-                                            ? BigDecimal.valueOf(2147483647L)
-                                            : BigDecimal.valueOf(Long.MAX_VALUE));
-                } else {
-                    var5 =
-                            var22 == 0
-                                    ? BigDecimal.valueOf(65535L)
-                                    : (var22 == 1
-                                            ? BigDecimal.valueOf(4294967295L)
-                                            : new BigDecimal("18446744073709551615"));
-                }
+            final BigDecimal minValue =
+                selectedIndex == 0 ? BigDecimal.valueOf(Short.MIN_VALUE) :
+                selectedIndex == 1 ? BigDecimal.valueOf(Integer.MIN_VALUE) :
+                selectedIndex == 2 ? BigDecimal.valueOf(Long.MIN_VALUE) :
+                selectedIndex == 3 ? BigDecimal.valueOf(-Float.MAX_VALUE) :
+                BigDecimal.valueOf(-Double.MAX_VALUE);
 
-                this.finByte = new byte[var22 < 3 ? 2 << var22 : (var22 == 3 ? 4 : 8)];
+            final BigDecimal maxValue;
+            if (2 < selectedIndex) {
+                maxValue =
+                    selectedIndex == 3 ? BigDecimal.valueOf(Float.MAX_VALUE) :
+                    BigDecimal.valueOf(Double.MAX_VALUE);
+            } else if (this.findComboBoxes[1].getSelectedIndex() == 0) {
+                maxValue =
+                    selectedIndex == 0 ? BigDecimal.valueOf(Short.MAX_VALUE) :
+                    selectedIndex == 1 ? BigDecimal.valueOf(Integer.MAX_VALUE) :
+                    BigDecimal.valueOf(Long.MAX_VALUE);
+            } else {
+                maxValue =
+                    selectedIndex == 0 ? BigDecimal.valueOf(0xffffL) : // (long) uint16 max value
+                    selectedIndex == 1 ? BigDecimal.valueOf(0xffff_ffffL) : // (long) uint32 max value
+                    new BigDecimal("18446744073709551615"); // uint64 max value
+            }
 
-                while (0 < var21) {
-                    try {
-                        var3 = new BigDecimal(var19.substring(0, var21));
-                        if (var3.compareTo(var4) >= 0 && var5.compareTo(var3) >= 0) {
-                            break;
-                        }
+            final int finByteLen =
+                selectedIndex < 3 ? 2 << selectedIndex :
+                selectedIndex == 3 ? 4 :
+                8;
+            this.finByte = new byte[finByteLen];
 
-                        throw new Exception("");
-                    } catch (Exception var31) {
-                        --var21;
-                    }
-                }
-
-                if (var21 == 0) {
-                    this.fJL.setText("<html><FONT color=red>Input must be a number.</FONT>");
-                } else if (var22 < 3) {
-                    BigInteger var7;
-                    try {
-                        var7 = var3.setScale(0, 7).unscaledValue();
-                    } catch (Exception var27) {
-                        var7 = var3.setScale(0, 5).unscaledValue();
-                        var1 = true;
-                    }
-
-                    if (var7.signum() < 0) {
-                        var15 = var7.longValue();
-                        if (this.fJCB[0].getSelectedIndex() == 0) {
-                            for (var23 = 0; var23 < this.finByte.length; ++var23) {
-                                this.finByte[this.finByte.length - var23 - 1] =
-                                        (byte) ((int) (var15 & 255L));
-                                var15 >>>= 8;
-                            }
-                        } else {
-                            for (var23 = 0; var23 < this.finByte.length; ++var23) {
-                                this.finByte[var23] = (byte) ((int) (var15 & 255L));
-                                var15 >>>= 8;
-                            }
-                        }
-                    } else {
-                        byte[] var2 = var7.toByteArray();
-                        var32 =
-                                this.finByte.length < var2.length
-                                        ? this.finByte.length
-                                        : var2.length;
-                        Arrays.fill(this.finByte, (byte) 0);
-                        if (this.fJCB[0].getSelectedIndex() == 0) {
-                            for (var23 = 1; var23 <= var32; ++var23) {
-                                this.finByte[this.finByte.length - var23] =
-                                        var2[var2.length - var23];
-                            }
-                        } else {
-                            for (var23 = 0; var23 < var32; ++var23) {
-                                this.finByte[var23] = var2[var2.length - 1 - var23];
-                            }
-                        }
-                    }
-                } else {
-                    float var13 = var3.floatValue();
-                    double var9 = var3.doubleValue();
-                    this.useFindChar =
-                            var1 =
-                                    0
-                                            != (var32 =
-                                                    var3.compareTo(
-                                                            new BigDecimal(
-                                                                    var22 == 3
-                                                                            ? (double) var13
-                                                                            : var9)));
-                    var15 =
-                            var17[0] =
-                                    var22 == 3
-                                            ? (long) Float.floatToRawIntBits(var13)
-                                            : Double.doubleToRawLongBits(var9);
-                    if (this.fJCB[0].getSelectedIndex() == 0) {
-                        for (var23 = 0; var23 < this.finByte.length; ++var23) {
-                            this.finByte[this.finByte.length - var23 - 1] =
-                                    (byte) ((int) (var15 & 255L));
-                            var15 >>>= 8;
-                        }
-                    } else {
-                        for (var23 = 0; var23 < this.finByte.length; ++var23) {
-                            this.finByte[var23] = (byte) ((int) (var15 & 255L));
-                            var15 >>>= 8;
-                        }
-                    }
-
-                    if (this.useFindChar) {
-                        var17[1] =
-                                var22 == 3
-                                        ? (long)
-                                                Float.floatToRawIntBits(
-                                                        var14 =
-                                                                0 < var32
-                                                                        ? math.nextUp(var13)
-                                                                        : math.nextDown(var13))
-                                        : Double.doubleToRawLongBits(
-                                                var11 =
-                                                        0 < var32
-                                                                ? math.nextUp(var9)
-                                                                : math.nextDown(var9));
-                        if (var22 == 3) {
-                            var18.append(var32 < 0 ? "&lt; " : "&gt; ")
-                                    .append(this.fForm.format(new BigDecimal((double) var13)))
-                                    .append("<br>" + (var32 < 0 ? "&gt; " : "&lt; "))
-                                    .append(this.fForm.format(new BigDecimal((double) var14)));
-                        } else {
-                            var18.append(var32 < 0 ? "&lt; " : "&gt; ")
-                                    .append(this.dForm.format(new BigDecimal(var9)))
-                                    .append("<br>" + (var32 < 0 ? "&gt; " : "&lt; "))
-                                    .append(this.dForm.format(new BigDecimal(var11)));
-                        }
-
-                        this.findChar = new byte[1][2][var22 == 3 ? 4 : 8];
-
-                        for (var32 = 0; var32 < 2; ++var32) {
-                            if (this.fJCB[0].getSelectedIndex() == 0) {
-                                for (var23 = 0; var23 < this.findChar[0][var32].length; ++var23) {
-                                    this.findChar[0][var32][this.finByte.length - var23 - 1] =
-                                            (byte) ((int) (var17[var32] & 255L));
-                                    var17[var32] >>>= 8;
-                                }
-                            } else {
-                                for (var23 = 0; var23 < this.findChar[0][var32].length; ++var23) {
-                                    this.findChar[0][var32][var23] =
-                                            (byte) ((int) (var17[var32] & 255L));
-                                    var17[var32] >>>= 8;
-                                }
-                            }
-                        }
-                    }
-                }
-            } else if (var22 == 5) {
-                var19 = var19.trim().replaceAll(" ", "");
-                if (var19.startsWith("0x") || var19.startsWith("Ox") || var19.startsWith("ox")) {
-                    var19 = var19.substring(2);
-                }
-
-                for (var21 = 0;
-                        var21 < var19.length()
-                                && -1 < "0123456789abcdefABCDEF".indexOf(var19.charAt(var21));
-                        ++var21) {;
-                }
-
-                if (var21 < 2) {
-                    this.fJL.setText(
-                            var21 == var19.length()
-                                    ? " "
-                                    : "<html><FONT color=red>Input must be a hexa string.</FONT>");
-                    return;
-                }
-
-                this.finByte = new byte[var21 >> 1];
-
+            while (0 < jj) {
                 try {
-                    for (var23 = 0; var23 < this.finByte.length; ++var23) {
-                        this.finByte[var23] =
-                                (byte)
-                                        Integer.parseInt(
-                                                var19.substring(var23 << 1, var23 * 2 + 2), 16);
-                    }
-                } catch (Exception var30) {;
-                }
-            } else if (var22 == 6) {
-                while (0 < var21) {
-                    try {
-                        var20 = var19.substring(0, var21);
-                        this.finByte = var20.getBytes("ISO-8859-1");
-                        if (!var20.equals(new String(this.finByte, "ISO-8859-1"))) {
-                            throw new Exception("");
-                        }
+                    var3 = new BigDecimal(findText.substring(0, jj));
+                    if (var3.compareTo(minValue) >= 0 && maxValue.compareTo(var3) >= 0) {
                         break;
-                    } catch (Exception var28) {
-                        --var21;
                     }
+
+                    throw new Exception("");
+                } catch (Exception e) {
+                    --jj;
+                }
+            }
+
+            if (jj == 0) {
+                this.findLabel.setText("<html><FONT color=red>Input must be a number.</FONT>");
+
+            } else if (selectedIndex < 3) {
+                BigInteger var7;
+                try {
+                    var7 = var3.setScale(0, RoundingMode.UNNECESSARY).unscaledValue();
+                } catch (Exception e) {
+                    var7 = var3.setScale(0, RoundingMode.HALF_DOWN).unscaledValue();
+                    flag1 = true;
                 }
 
-                if (var21 < 1) {
-                    this.fJL.setText(
-                            "<html><FONT color=red>Input must be an ISO-8859-1 string.</FONT>");
-                    return;
+                if (var7.signum() < 0) {
+                    time = var7.longValue();
+                    if (this.findComboBoxes[0].getSelectedIndex() == 0) {
+                        for (int i = 0; i < this.finByte.length; ++i) {
+                            this.finByte[this.finByte.length - i - 1] =
+                                    (byte) ((int) (time & 255L));
+                            time >>>= 8;
+                        }
+                    } else {
+                        for (int i = 0; i < this.finByte.length; ++i) {
+                            this.finByte[i] = (byte) ((int) (time & 255L));
+                            time >>>= 8;
+                        }
+                    }
+                } else {
+                    byte[] var2 = var7.toByteArray();
+                    ii = Math.min(this.finByte.length, var2.length);
+                    Arrays.fill(this.finByte, (byte) 0);
+                    if (this.findComboBoxes[0].getSelectedIndex() == 0) {
+                        for (int i = 1; i <= ii; ++i) {
+                            this.finByte[this.finByte.length - i] =
+                                    var2[var2.length - i];
+                        }
+                    } else {
+                        for (int i = 0; i < ii; ++i) {
+                            this.finByte[i] = var2[var2.length - 1 - i];
+                        }
+                    }
                 }
             } else {
-                while (0 < var21) {
-                    try {
-                        var20 = var19.substring(0, var21);
-                        this.finByte =
-                                var20.getBytes(
-                                        var22 == 7
-                                                ? "UTF-8"
-                                                : (this.fJCB[0].getSelectedIndex() == 0
-                                                        ? "UTF-16BE"
-                                                        : "UTF-16LE"));
-                        break;
-                    } catch (Exception var29) {
-                        --var21;
+                float floatValue = var3.floatValue();
+                double doubleValue = var3.doubleValue();
+                BigDecimal asBigDecimal = new BigDecimal(selectedIndex == 3 ? (double) floatValue : doubleValue);
+                ii = var3.compareTo(asBigDecimal);
+                this.useFindChar = flag1 = 0 != ii;
+
+                time = var17[0] =
+                    selectedIndex == 3 ? (long) Float.floatToRawIntBits(floatValue) :
+                    Double.doubleToRawLongBits(doubleValue);
+
+                if (this.findComboBoxes[0].getSelectedIndex() == 0) {
+                    for (int i = 0; i < this.finByte.length; ++i) {
+                        this.finByte[this.finByte.length - i - 1] =
+                                (byte) (int) (time & 0xffL);
+                        time >>>= 8;
+                    }
+                } else {
+                    for (int i = 0; i < this.finByte.length; ++i) {
+                        this.finByte[i] = (byte) (int) (time & 0xffL);
+                        time >>>= 8;
                     }
                 }
 
-                if (var21 < 1) {
-                    this.fJL.setText("<html><FONT color=red>Input must be an UTF string.</FONT>");
-                    return;
-                }
-            }
+                if (this.useFindChar) {
+                    var17[1] =
+                        selectedIndex == 3
+                        ? (long) Float.floatToRawIntBits(var14 = 0 < ii ? math.nextUp(floatValue) : math.nextDown(floatValue))
+                        : Double.doubleToRawLongBits(var11 = 0 < ii ? math.nextUp(doubleValue) : math.nextDown(doubleValue));
 
-            if (var22 < 3 || 4 < var22 || !var1) {
-                for (var23 = 0; var23 < this.finByte.length; ++var23) {
-                    var32 = this.finByte[var23] & 255;
-                    var18.append(
-                            (var32 < 16 ? "0" : "") + Integer.toHexString(var32).toUpperCase());
-                    if ((var23 + 1) % 16 == 0) {
-                        var18.append("<br>");
-                    } else if ((var23 + 1) % (1 << this.fJCB[3].getSelectedIndex()) == 0) {
-                        var18.append(" ");
+                    if (selectedIndex == 3) {
+                        sb
+                            .append(ii < 0 ? "&lt; " : "&gt; ")
+                            .append(this.floatFormat.format(new BigDecimal(floatValue)))
+                            .append("<br>")
+                            .append(ii < 0 ? "&gt; " : "&lt; ")
+                            .append(this.floatFormat.format(new BigDecimal(var14)));
+                    } else {
+                        sb
+                            .append(ii < 0 ? "&lt; " : "&gt; ")
+                            .append(this.doubleFormat.format(new BigDecimal(doubleValue)))
+                            .append("<br>")
+                            .append(ii < 0 ? "&gt; " : "&lt; ")
+                            .append(this.doubleFormat.format(new BigDecimal(var11)));
                     }
-                }
-            }
 
-            var19 = var19.toUpperCase();
-            if (var21 == var19.length() - 1
-                    && (var22 >= 5 || var19.charAt(var19.length() - 1) != 69)) {
-                var18.append("<br><FONT color=red>The last char is invalid.</FONT>");
-            } else if (var21 < var19.length() - 1
-                    && (var21 != var19.length() - 2
-                            || var22 >= 5
-                            || var19.charAt(var19.length() - 2) != 69
-                            || var19.charAt(var19.length() - 1) != 43
-                                    && var19.charAt(var19.length() - 1) != 45)) {
-                var18.append("<br><FONT color=red>The last ")
-                        .append(var19.length() - var21)
-                        .append(" caracters are invalid.</FONT>");
-            }
+                    this.findChar = new byte[1][2][selectedIndex == 3 ? 4 : 8];
 
-            if (var1 && !this.useFindChar) {
-                var18.append(
-                        "<br><FONT color=red>The binary doesn\'t represent exactly the significand.</FONT>");
-            }
-
-            this.fJL.setText(var18.toString());
-            if (var20 != null
-                    && 0 < var20.length()
-                    && this.fJRB.isSelected()
-                    && !var20.toUpperCase().equals(var20.toLowerCase())) {
-                var20 = var20.toUpperCase();
-                this.findChar = new byte[var20.length()][][];
-
-                for (var21 = 0; var21 < var20.length(); ++var21) {
-                    char var8 = var20.charAt(var21);
-                    var23 = var8 == Character.toLowerCase(var8) ? 1 : 2;
-                    if (1 < var23) {
-                        for (var22 = 0; var22 < accent.s.length; ++var22) {
-                            if (-1 < accent.s[var22].indexOf(var8)) {
-                                var23 = accent.s[var22].length();
-                                break;
+                    for (ii = 0; ii < 2; ++ii) {
+                        if (this.findComboBoxes[0].getSelectedIndex() == 0) {
+                            for (int i = 0; i < this.findChar[0][ii].length; ++i) {
+                                this.findChar[0][ii][this.finByte.length - i - 1] =
+                                        (byte) ((int) (var17[ii] & 255L));
+                                var17[ii] >>>= 8;
                             }
-                        }
-                    }
-
-                    this.findChar[var21] = new byte[var23][];
-
-                    for (var32 = 0; var32 < var23; ++var32) {
-                        if (var23 < 3) {
-                            var8 = var32 == 0 ? var8 : Character.toUpperCase(var8);
-                        } else if (var22 < accent.s.length) {
-                            var8 = accent.s[var22].charAt(var32);
-                        }
-
-                        if (var22 == 6) {
-                            this.findChar[var21][var32] = new byte[1];
-                            this.findChar[var21][var32][0] =
-                                    var8 < 256 ? (byte) var8 : this.findChar[var21][0][0];
-                        } else if (var22 == 8) {
-                            this.findChar[var21][var32] = new byte[2];
-                            this.findChar[var21][var32][1 - this.fJCB[0].getSelectedIndex()] =
-                                    (byte) (var8 & 255);
-                            this.findChar[var21][var32][this.fJCB[0].getSelectedIndex()] =
-                                    (byte) (var8 >> 8);
                         } else {
-                            this.findChar[var21][var32] =
-                                    new byte
-                                            [var8 < 128
-                                                    ? 1
-                                                    : (var8 < 2048 ? 2 : (var8 < 65536 ? 3 : 4))];
-                            if (var8 < 128) {
-                                this.findChar[var21][var32][0] = (byte) var8;
-                            } else {
-                                int var33;
-                                for (var33 = this.findChar[var21][var32].length - 1;
-                                        0 < var33;
-                                        --var33) {
-                                    this.findChar[var21][var32][var33] = (byte) (var8 & 63 | 128);
-                                    var8 = (char) (var8 >> 6);
-                                }
-
-                                var33 = this.findChar[var21][var32].length;
-                                this.findChar[var21][var32][0] =
-                                        (byte)
-                                                (var8
-                                                        | (var33 == 2
-                                                                ? 192
-                                                                : (var33 == 3 ? 224 : 240)));
+                            for (int i = 0; i < this.findChar[0][ii].length; ++i) {
+                                this.findChar[0][ii][i] =
+                                        (byte) ((int) (var17[ii] & 255L));
+                                var17[ii] >>>= 8;
                             }
                         }
+                    }
+                }
+            }
+        } else if (selectedIndex == 5) {
+            findText = findText.trim().replaceAll(" ", "");
+            if (findText.startsWith("0x") || findText.startsWith("Ox") || findText.startsWith("ox")) {
+                findText = findText.substring(2);
+            }
+
+            for (jj = 0; jj < findText.length()
+                    && -1 < "0123456789abcdefABCDEF".indexOf(findText.charAt(jj)); ++jj)
+                ;
+
+            if (jj < 2) {
+                this.findLabel.setText(jj == findText.length()
+                    ? " "
+                    : "<html><FONT color=red>Input must be a hexa string.</FONT>");
+                return;
+            }
+
+            this.finByte = new byte[jj >> 1];
+
+            try {
+                for (int i = 0; i < this.finByte.length; ++i) {
+                    this.finByte[i] = (byte) Integer.parseInt(
+                        findText.substring(i << 1, i * 2 + 2), 16);
+                }
+            } catch (Exception ignored) {
+            }
+
+        } else if (selectedIndex == 6) {
+            while (0 < jj) {
+                try {
+                    findTextSub = findText.substring(0, jj);
+                    this.finByte = findTextSub.getBytes(StandardCharsets.ISO_8859_1);
+                    if (!findTextSub.equals(new String(this.finByte, StandardCharsets.ISO_8859_1))) {
+                        throw new Exception("");
+                    }
+                    break;
+                } catch (Exception var28) {
+                    --jj;
+                }
+            }
+
+            if (jj < 1) {
+                this.findLabel.setText("<html><FONT color=red>Input must be an ISO-8859-1 string.</FONT>");
+                return;
+            }
+        } else {
+            while (0 < jj) {
+                try {
+                    findTextSub = findText.substring(0, jj);
+                    this.finByte = findTextSub.getBytes(
+                        selectedIndex == 7 ? StandardCharsets.UTF_8 :
+                        this.findComboBoxes[0].getSelectedIndex() == 0 ? StandardCharsets.UTF_16BE :
+                        StandardCharsets.UTF_16LE);
+                    break;
+                } catch (Exception e) {
+                    --jj;
+                }
+            }
+
+            if (jj < 1) {
+                this.findLabel.setText("<html><FONT color=red>Input must be an UTF string.</FONT>");
+                return;
+            }
+        }
+
+        if (selectedIndex < 3 || 4 < selectedIndex || !flag1) {
+            for (int i = 0; i < this.finByte.length; ++i) {
+                ii = this.finByte[i] & 255;
+                sb.append(ii < 16 ? "0" : "")
+                    .append(Integer.toHexString(ii).toUpperCase());
+                if ((i + 1) % 16 == 0) {
+                    sb.append("<br>");
+                } else if ((i + 1) % (1 << this.findComboBoxes[3].getSelectedIndex()) == 0) {
+                    sb.append(" ");
+                }
+            }
+        }
+
+        findText = findText.toUpperCase();
+        if (jj == findText.length() - 1
+                && (selectedIndex >= 5 || findText.charAt(findText.length() - 1) != 'E')) {
+            sb.append("<br><FONT color=red>The last char is invalid.</FONT>");
+        } else if (jj < findText.length() - 1
+                && (jj != findText.length() - 2
+                        || selectedIndex >= 5
+                        || findText.charAt(findText.length() - 2) != 'E'
+                        || findText.charAt(findText.length() - 1) != '+'
+                                && findText.charAt(findText.length() - 1) != '-')) {
+            sb
+                .append("<br><FONT color=red>The last ")
+                .append(findText.length() - jj)
+                .append(" characters are invalid.</FONT>");
+        }
+
+        if (flag1 && !this.useFindChar) {
+            sb.append("<br><FONT color=red>The binary doesn't represent exactly the significand.</FONT>");
+        }
+
+        this.findLabel.setText(sb.toString());
+        if (findTextSub == null || findTextSub.isEmpty()
+            || !this.findCheckBoxIgnoreCase.isSelected()
+            || findTextSub.toUpperCase().equals(findTextSub.toLowerCase())) {
+            return;
+        }
+
+        findTextSub = findTextSub.toUpperCase();
+        this.findChar = new byte[findTextSub.length()][][];
+
+        for (jj = 0; jj < findTextSub.length(); ++jj) {
+            char ch = findTextSub.charAt(jj);
+            int k = ch == Character.toLowerCase(ch) ? 1 : 2;
+            if (k == 2) {
+                for (selectedIndex = 0; selectedIndex < accent.s.length; ++selectedIndex) {
+                    if (-1 < accent.s[selectedIndex].indexOf(ch)) {
+                        k = accent.s[selectedIndex].length();
+                        break;
+                    }
+                }
+            }
+
+            this.findChar[jj] = new byte[k][];
+
+            for (ii = 0; ii < k; ++ii) {
+                if (k < 3) {
+                    ch = ii == 0 ? ch : Character.toUpperCase(ch);
+                } else if (selectedIndex < accent.s.length) {
+                    ch = accent.s[selectedIndex].charAt(ii);
+                }
+
+                if (selectedIndex == 6) {
+                    this.findChar[jj][ii] = new byte[1];
+                    this.findChar[jj][ii][0] =
+                            ch < 256 ? (byte) ch : this.findChar[jj][0][0];
+
+                } else if (selectedIndex == 8) {
+                    this.findChar[jj][ii] = new byte[2];
+                    this.findChar[jj][ii][1 - this.findComboBoxes[0].getSelectedIndex()] =
+                            (byte) (ch & 255);
+                    this.findChar[jj][ii][this.findComboBoxes[0].getSelectedIndex()] =
+                            (byte) (ch >> 8);
+
+                } else {
+                    this.findChar[jj][ii] = new byte[
+                        ch < 128 ? 1 :
+                        ch < 2048 ? 2 :
+                        ch < 65536 ? 3 :
+                        4];
+                    if (ch < 128) {
+                        this.findChar[jj][ii][0] = (byte) ch;
+                    } else {
+                        for (int n = this.findChar[jj][ii].length - 1; 0 < n; --n) {
+                            this.findChar[jj][ii][n] = (byte) (ch & 0x3f | 0x80);
+                            ch = (char) (ch >> 6);
+                        }
+
+                        int n = this.findChar[jj][ii].length;
+                        int addBits =
+                            n == 2 ? 0b11000000 :
+                            n == 3 ? 0b11100000 :
+                                     0b11110000;
+                        this.findChar[jj][ii][0] = (byte) (ch | addBits);
                     }
                 }
             }
         }
     }
 
-    public void mouseReleased(MouseEvent var1) {}
+    @Override
+    public void mouseReleased(MouseEvent event) {}
 
-    public void mouseEntered(MouseEvent var1) {}
+    @Override
+    public void mouseEntered(MouseEvent event) {}
 
-    public void mouseExited(MouseEvent var1) {}
+    @Override
+    public void mouseExited(MouseEvent event) {}
 
-    public void mousePressed(MouseEvent var1) {}
+    @Override
+    public void mousePressed(MouseEvent event) {}
 
-    public void mouseClicked(MouseEvent var1) {
-        this.hexOffset = !this.hexOffset;
+    @Override
+    public void mouseClicked(MouseEvent event) {
+        this.isHexOffset = !this.isHexOffset;
         this.hexV.setStatus();
     }
 }

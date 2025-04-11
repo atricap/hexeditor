@@ -12,138 +12,122 @@ import javax.swing.JProgressBar;
 
 class saveT extends Thread {
 
-    File f1;
-    File f2;
-    Vector v1;
+    File file1;
+    File file2;
+    Vector<edObj> edV;
     binEdit hexV;
-    JProgressBar jPBar;
+    JProgressBar progressBar;
     private long time;
     private long virtualSize;
     private long pos;
 
+    @Override
     public void run() {
-        boolean var1 = false;
-        int var3 = 0;
-        FileInputStream var5 = null;
-        byte[] var8 = new byte[2097152];
-        if (this.v1 != null && this.v1.size() != 0) {
-            long var14 = 0L;
-            this.pos = 0L;
-            this.time = System.currentTimeMillis();
-            this.virtualSize = ((edObj) this.v1.lastElement()).p2;
-            this.jPBar.setMaximum(1073741824);
+        final int twoMiB = 2 * 1024 * 1024;
+        final long twoMiBL = 2L * 1024 * 1024;
+        final int oneGiB = 1 * 1024 * 1024 * 1024;
 
-            edObj var9;
-            while (var3 < this.v1.size()) {
-                var9 = (edObj) this.v1.get(var3);
-                if (this.pos < var9.p2) {
-                    break;
-                }
+        int n = 0;
+        byte[] var8 = new byte[twoMiB];
+        if (this.edV == null || this.edV.isEmpty()) {
+            return;
+        }
 
-                ++var3;
+        long var14 = 0L;
+        this.pos = 0L;
+        this.time = System.currentTimeMillis();
+        this.virtualSize = this.edV.lastElement().p2;
+        this.progressBar.setMaximum(oneGiB);
+
+        edObj eObj;
+        while (n < this.edV.size()) {
+            eObj = this.edV.get(n);
+            if (this.pos < eObj.p2) {
+                break;
             }
+            ++n;
+        }
 
-            BufferedOutputStream var16 = null;
+        try {
+            File outFile = new File(this.file2.getPath() + ".TMP");
 
-            try {
-                if (this.f1 != null) {
-                    var5 = new FileInputStream(this.f1);
-                }
-
-                File var6 = new File(this.f2.getPath() + ".TMP");
-
-                for (var16 = new BufferedOutputStream(new FileOutputStream(var6), 2097152);
-                        var3 < this.v1.size() && this.next();
-                        ++var3) {
-                    var9 = (edObj) this.v1.get(var3);
-                    long var10 = var9.p1 - var9.offset;
-                    this.pos = var9.p1;
-                    if (var9.o.a1 != 4
-                            && var9.o.a1 != 2
-                            && (var9.o.a1 != 6 || 1 >= var9.o.B.size())) {
+            try (FileInputStream in = this.file1 != null ? new FileInputStream(this.file1) : null;
+                    BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(outFile), twoMiB)) {
+                for (; n < this.edV.size() && this.next(); ++n) {
+                    eObj = this.edV.get(n);
+                    long var10 = eObj.p1 - eObj.offset;
+                    this.pos = eObj.p1;
+                    if (eObj.o.a1 != 4
+                        && eObj.o.a1 != 2
+                        && (eObj.o.a1 != 6 || 1 >= eObj.o.bytes.size())) {
                         int var2;
                         long var12;
-                        if (var9.o.a1 == 6) {
-                            Arrays.fill(var8, ((Byte) var9.o.B.get(0)).byteValue());
+                        if (eObj.o.a1 == 6) {
+                            Arrays.fill(var8, eObj.o.bytes.get(0));
 
-                            while (this.pos < var9.p2 && this.next()) {
-                                var12 = var9.p2 - this.pos;
-                                var2 = var12 < 2097152L ? (int) var12 : 2097152;
-                                var16.write(var8, 0, var2);
-                                this.pos += (long) var2;
+                            while (this.pos < eObj.p2 && this.next()) {
+                                var12 = eObj.p2 - this.pos;
+                                var2 = var12 < twoMiBL ? (int) var12 : twoMiB;
+                                out.write(var8, 0, var2);
+                                this.pos += var2;
                                 this.setJPBar();
                             }
                         } else {
                             for (var12 = this.pos - var10;
-                                    var14 < var12;
-                                    var14 += var5.skip(var12 - var14)) {;
-                            }
+                                 var14 < var12;
+                                 var14 += in.skip(var12 - var14))
+                                ;
 
-                            while (this.pos < var9.p2 && this.next()) {
-                                var12 = var9.p2 - this.pos;
-                                var2 = var5.read(var8, 0, var12 < 2097152L ? (int) var12 : 2097152);
+                            while (this.pos < eObj.p2 && this.next()) {
+                                var12 = eObj.p2 - this.pos;
+                                var2 = in.read(var8, 0, var12 < twoMiBL ? (int) var12 : twoMiB);
                                 if (var2 <= 0) {
                                     throw new IOException(
-                                            var2 == 0 ? "Unable to access file" : "EOF");
+                                        var2 == 0 ? "Unable to access file" : "EOF");
                                 }
 
-                                var14 += (long) var2;
-                                var16.write(var8, 0, var2);
-                                this.pos += (long) var2;
+                                var14 += var2;
+                                out.write(var8, 0, var2);
+                                this.pos += var2;
                                 this.setJPBar();
                             }
                         }
                     } else {
-                        while (this.pos < var9.p2 && this.next()) {
-                            var16.write(
-                                    ((Byte) var9.o.B.get((int) (this.pos - var10))).byteValue());
+                        while (this.pos < eObj.p2 && this.next()) {
+                            out.write(
+                                eObj.o.bytes.get((int) (this.pos - var10)));
                             ++this.pos;
                         }
 
                         this.setJPBar();
                     }
                 }
-
-                var16.close();
-                if (var5 != null) {
-                    var5.close();
-                }
-
-                if (this.hexV.rAF != null) {
-                    this.hexV.rAF.close();
-                }
-
-                if (this.f1 != null && this.f1.equals(this.f2)) {
-                    File var7 = new File(this.f1.getParent(), this.f1.getName() + ".bak");
-                    if (var7.exists()) {
-                        var7.delete();
-                    }
-
-                    this.f1.renameTo(var7);
-                }
-
-                var6.renameTo(this.f2);
-                this.hexV.save2(this.f2);
-            } catch (Exception var20) {
-                JOptionPane.showMessageDialog(this.hexV, var20);
-                this.hexV.save2((File) null);
             }
 
-            try {
-                var16.close();
-            } catch (Exception var19) {;
+            if (this.hexV.randomAccessFile != null) {
+                this.hexV.randomAccessFile.close();
             }
 
-            try {
-                var5.close();
-            } catch (Exception var18) {;
+            if (this.file1 != null && this.file1.equals(this.file2)) {
+                File bakFile = new File(this.file1.getParent(), this.file1.getName() + ".bak");
+                if (bakFile.exists()) {
+                    bakFile.delete();
+                }
+                this.file1.renameTo(bakFile);
             }
+
+            outFile.renameTo(this.file2);
+            this.hexV.save2(this.file2);
+
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this.hexV, e);
+            this.hexV.save2(null);
         }
     }
 
     protected void setJPBar() {
-        this.jPBar.setValue((int) (1.07374182E9F * ((float) this.pos / (float) this.virtualSize)));
-        this.jPBar.setString(
+        this.progressBar.setValue((int) (1.07374182E9F * ((float) this.pos / (float) this.virtualSize)));
+        this.progressBar.setString(
                 this.toTime(this.pos, this.virtualSize, System.currentTimeMillis() - this.time));
     }
 
@@ -151,38 +135,35 @@ class saveT extends Thread {
         return !Thread.currentThread().isInterrupted();
     }
 
-    private String toTime(long var1, long var3, long var5) {
-        StringBuffer var7 =
-                new StringBuffer(
-                        Float.toString(
-                                (float) ((int) ((float) var1 / ((float) var3 / 1000.0F))) / 10.0F));
-        var7.append("% saved");
-        if (var1 != 0L) {
-            var5 = var5 / 1000L * (var3 / var1);
+    private String toTime(long a, long b, long c) {
+        StringBuilder sb = new StringBuilder(
+            Float.toString((float) ((int) ((float) a / ((float) b / 1000.0F))) / 10.0F));
+        sb.append("% saved");
+        if (a != 0L) {
+            c = c / 1000L * (b / a);
         }
-
-        if (var5 == Long.MAX_VALUE) {
+        if (c == Long.MAX_VALUE) {
             return "";
-        } else {
-            long[] var8 = new long[] {86400L, 3600L, 60L, 1L};
-            String[] var9 = new String[] {"D ", "H ", "mn ", "s "};
-            int var11 = 0;
-            var7.append(", time remaining ");
-
-            for (int var10 = 0; var10 < var8.length && var11 < 2; ++var10) {
-                long var12;
-                if ((var12 = var5 / var8[var10]) != 0L || var11 == 1) {
-                    if (var12 < 10L && 0 < var11) {
-                        var7.append("0");
-                    }
-
-                    var7.append(var12).append(var9[var10]);
-                    var5 %= var8[var10];
-                    ++var11;
-                }
-            }
-
-            return var7.toString();
         }
+
+        long[] conversions = new long[] {86400L, 3600L, 60L, 1L};
+        String[] units = new String[] {"D ", "H ", "mn ", "s "};
+        int n = 0;
+        sb.append(", time remaining ");
+
+        for (int i = 0; i < conversions.length && n < 2; ++i) {
+            long k;
+            if ((k = c / conversions[i]) != 0L || n == 1) {
+                if (k < 10L && 0 < n) {
+                    sb.append("0");
+                }
+
+                sb.append(k).append(units[i]);
+                c %= conversions[i];
+                ++n;
+            }
+        }
+
+        return sb.toString();
     }
 }
