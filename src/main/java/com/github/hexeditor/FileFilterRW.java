@@ -3,7 +3,7 @@ package com.github.hexeditor;
 import java.io.File;
 import javax.swing.filechooser.FileFilter;
 
-class filterRW extends FileFilter {
+class FileFilterRW extends FileFilter {
 
     @Override
     public boolean accept(File f) {

@@ -9,13 +9,13 @@ import java.io.InputStreamReader;
 import java.util.Vector;
 import javax.swing.Timer;
 
-class slaveT extends Thread implements ActionListener {
+class SlaveThread extends Thread implements ActionListener {
 
-    binEdit hexV;
+    BinEdit hexV;
     Timer timer = new Timer(300, this);
     private final BufferedReader bR;
 
-    slaveT() {
+    SlaveThread() {
         this.bR = new BufferedReader(new InputStreamReader(System.in));
     }
 

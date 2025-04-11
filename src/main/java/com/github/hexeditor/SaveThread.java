@@ -10,12 +10,12 @@ import java.util.Vector;
 import javax.swing.JOptionPane;
 import javax.swing.JProgressBar;
 
-class saveT extends Thread {
+class SaveThread extends Thread {
 
     File file1;
     File file2;
-    Vector<edObj> edV;
-    binEdit hexV;
+    Vector<EdObj> edV;
+    BinEdit hexV;
     JProgressBar progressBar;
     private long time;
     private long virtualSize;
@@ -39,7 +39,7 @@ class saveT extends Thread {
         this.virtualSize = this.edV.lastElement().p2;
         this.progressBar.setMaximum(oneGiB);
 
-        edObj eObj;
+        EdObj eObj;
         while (n < this.edV.size()) {
             eObj = this.edV.get(n);
             if (this.pos < eObj.p2) {

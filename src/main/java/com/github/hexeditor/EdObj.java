@@ -2,7 +2,7 @@ package com.github.hexeditor;
 
 import java.util.Stack;
 
-class edObj {
+class EdObj {
 
     int a1;
     public long p1 = -1L;
@@ -10,17 +10,17 @@ class edObj {
     public long offset = 0L;
     public long size = 0L;
     public boolean isEditing = false;
-    edObj o = null;
+    EdObj o = null;
     public Stack<Byte> bytes = new Stack<>();
 
-    public edObj(long p1, long size, int a1) {
+    public EdObj(long p1, long size, int a1) {
         this.p1 = p1;
         this.a1 = a1;
         this.size = size;
         this.p2 = this.p1 + size;
     }
 
-    public edObj(long p1, long p2, long offset, edObj obj) {
+    public EdObj(long p1, long p2, long offset, EdObj obj) {
         this.p1 = p1;
         this.p2 = p2;
         this.offset = offset;

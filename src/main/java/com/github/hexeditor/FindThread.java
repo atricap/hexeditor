@@ -6,16 +6,16 @@ import java.io.IOException;
 import java.util.Vector;
 import javax.swing.JProgressBar;
 
-class findT extends Thread {
+class FindThread extends Thread {
 
     File file1;
-    Vector<edObj> edV;
+    Vector<EdObj> edV;
     boolean isApplet;
     boolean ignoreCase;
     long pos;
     byte[] inBytes = null;
     byte[][][] inChars = null;
-    binEdit hexV;
+    BinEdit hexV;
     JProgressBar jPBar;
     private boolean isFound = false;
     private int realLength = 0;
@@ -30,7 +30,7 @@ class findT extends Thread {
         final long twoMiBL = 2L * 1024L * 1024L;
         final int oneGiB = 1 * 1024 * 1024 * 1024;
         byte[] bytes = new byte[twoMiB];
-        edObj eObj = null;
+        EdObj eObj = null;
         if (this.edV == null || this.edV.isEmpty()) {
             return;
         }
@@ -102,7 +102,7 @@ class findT extends Thread {
                 this.setJPBar();
             }
         } catch (Exception var16) {
-            System.err.printf("findT %s\n\t%s\n\t%d\t%d%n", var16, eObj, k, this.pos);
+            System.err.printf("FindThread %s\n\t%s\n\t%d\t%d%n", var16, eObj, k, this.pos);
         }
 
         int length = this.ignoreCase ? this.realLength : this.inBytes.length;

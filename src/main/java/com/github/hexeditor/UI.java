@@ -110,7 +110,7 @@ public class UI extends JApplet {
     }
 
     private static void setUpMainPanel(boolean isApplet, boolean isSlave, String fileName) {
-        mainPanel.add(binPanel.createInstance(isApplet, isSlave, fileName, menuBar -> theRootPane.setJMenuBar(menuBar)));
+        mainPanel.add(BinPanel.createInstance(isApplet, isSlave, fileName, menuBar -> theRootPane.setJMenuBar(menuBar)));
     }
 
     private static void bugReport() {

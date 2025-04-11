@@ -19,13 +19,13 @@ import javax.swing.border.TitledBorder;
 import javax.swing.event.CaretEvent;
 import javax.swing.event.CaretListener;
 
-public class binPanel extends JPanel
+public class BinPanel extends JPanel
         implements ActionListener, ItemListener, CaretListener, MouseListener {
 
     JTextField fileField = new JTextField();
     JProgressBar savePBar = new JProgressBar(0, 0, 0);
     JProgressBar findPBar = new JProgressBar(0, 0, 0);
-    binEdit hexV;
+    BinEdit hexV;
     JComponent help = this.createHelp();
     boolean helpFlag = false;
     boolean cp437Available = false;
@@ -49,16 +49,16 @@ public class binPanel extends JPanel
     byte[][][] findChar;
     boolean isApplet = false;
     boolean isHexOffset = true;
-    slaveT slaveThread;
+    SlaveThread slaveThread;
     DecimalFormatSymbols decimalFormatSymbols = new DecimalFormatSymbols();
     DecimalFormat floatFormat = new DecimalFormat("#.##########E0");
     DecimalFormat doubleFormat = new DecimalFormat("#.###################E0");
 
-    public static binPanel createInstance(boolean isApplet, boolean isSlave, String fileName, Consumer<JMenuBar> onMenuCreated) {
-        return new binPanel(isApplet, isSlave, fileName, onMenuCreated);
+    public static BinPanel createInstance(boolean isApplet, boolean isSlave, String fileName, Consumer<JMenuBar> onMenuCreated) {
+        return new BinPanel(isApplet, isSlave, fileName, onMenuCreated);
     }
 
-    public binPanel(boolean isApplet, boolean isSlave, String fileName, Consumer<JMenuBar> onMenuCreated) {
+    public BinPanel(boolean isApplet, boolean isSlave, String fileName, Consumer<JMenuBar> onMenuCreated) {
         this.isApplet = isApplet;
 
         onMenuCreated.accept(createMenuBar());
@@ -198,7 +198,7 @@ public class binPanel extends JPanel
         gbc.fill = 1;
         gbc.weighty = 1.0D;
         ++gbc.gridy;
-        this.hexV = new binEdit(this, this.isApplet);
+        this.hexV = new BinEdit(this, this.isApplet);
         panel.add(this.hexV, gbc);
 
         gbc.fill = 2;
@@ -209,7 +209,7 @@ public class binPanel extends JPanel
         this.findComboBoxes[2].setSelectedIndex(6);
 
         if (isSlave) {
-            this.slaveThread = new slaveT();
+            this.slaveThread = new SlaveThread();
             this.slaveThread.setDaemon(true);
             this.slaveThread.hexV = this.hexV;
             this.slaveThread.start();
@@ -221,7 +221,7 @@ public class binPanel extends JPanel
     }
 
     public JComponent createHelp() {
-        jEP editor = new jEP(null, false);
+        HelpEditorPane editor = new HelpEditorPane(null, false);
         editor.setContentType("text/html");
 
         String lang = Locale.getDefault().getLanguage();
@@ -658,8 +658,8 @@ public class binPanel extends JPanel
                 if (this.useFindChar) {
                     var17[1] =
                         selectedIndex == 3
-                        ? (long) Float.floatToRawIntBits(var14 = 0 < ii ? math.nextUp(floatValue) : math.nextDown(floatValue))
-                        : Double.doubleToRawLongBits(var11 = 0 < ii ? math.nextUp(doubleValue) : math.nextDown(doubleValue));
+                        ? (long) Float.floatToRawIntBits(var14 = 0 < ii ? MathUtils.nextUp(floatValue) : MathUtils.nextDown(floatValue))
+                        : Double.doubleToRawLongBits(var11 = 0 < ii ? MathUtils.nextUp(doubleValue) : MathUtils.nextDown(doubleValue));
 
                     if (selectedIndex == 3) {
                         sb
@@ -808,9 +808,9 @@ public class binPanel extends JPanel
             char ch = findTextSub.charAt(jj);
             int k = ch == Character.toLowerCase(ch) ? 1 : 2;
             if (k == 2) {
-                for (selectedIndex = 0; selectedIndex < accent.s.length; ++selectedIndex) {
-                    if (-1 < accent.s[selectedIndex].indexOf(ch)) {
-                        k = accent.s[selectedIndex].length();
+                for (selectedIndex = 0; selectedIndex < Accent.s.length; ++selectedIndex) {
+                    if (-1 < Accent.s[selectedIndex].indexOf(ch)) {
+                        k = Accent.s[selectedIndex].length();
                         break;
                     }
                 }
@@ -821,8 +821,8 @@ public class binPanel extends JPanel
             for (ii = 0; ii < k; ++ii) {
                 if (k < 3) {
                     ch = ii == 0 ? ch : Character.toUpperCase(ch);
-                } else if (selectedIndex < accent.s.length) {
-                    ch = accent.s[selectedIndex].charAt(ii);
+                } else if (selectedIndex < Accent.s.length) {
+                    ch = Accent.s[selectedIndex].charAt(ii);
                 }
 
                 if (selectedIndex == 6) {

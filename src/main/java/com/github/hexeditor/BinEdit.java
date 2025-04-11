@@ -36,7 +36,7 @@ import javax.swing.JScrollBar;
 import javax.swing.JTextField;
 import javax.swing.Timer;
 
-class binEdit extends JComponent implements MouseListener, MouseMotionListener, MouseWheelListener, KeyListener,
+class BinEdit extends JComponent implements MouseListener, MouseMotionListener, MouseWheelListener, KeyListener,
         ActionListener, AdjustmentListener {
 
     boolean nibArea = true;
@@ -74,22 +74,22 @@ class binEdit extends JComponent implements MouseListener, MouseMotionListener, 
     Timer timer = new Timer(500, this);
     Clipboard clipboard;
     RandomAccessFile randomAccessFile;
-    Stack<edObj> undoStack = new Stack<>();
+    Stack<EdObj> undoStack = new Stack<>();
     Vector<byte[]> srcV = new Vector<>();
     Vector<Long> markV = new Vector<>();
     Vector<Long> MarkV = new Vector<>();
-    Vector<edObj> edV = new Vector<>();
+    Vector<EdObj> edV = new Vector<>();
     Vector<byte[]> copyPasteV = new Vector<>();
     Byte byteCtrlY = null;
-    edObj eObj = null;
-    edObj eObjCtrlY = null;
+    EdObj eObj = null;
+    EdObj eObjCtrlY = null;
     File file1 = null;
-    public binPanel topPanel;
-    saveT saveThread;
-    findT findThread;
+    public BinPanel topPanel;
+    SaveThread saveThread;
+    FindThread findThread;
     long longInput = 0L;
 
-    public binEdit(binPanel theBinPanel, boolean isApplet) {
+    public BinEdit(BinPanel theBinPanel, boolean isApplet) {
         this.setLayout(new BorderLayout());
         this.add(this.scrollBar, "East");
         this.setGrid(14);
@@ -135,7 +135,7 @@ class binEdit extends JComponent implements MouseListener, MouseMotionListener, 
         } else {
             this.jSbSource = false;
             this.scrollBar.setValue(0);
-            this.pushHObj(new edObj(0L, 0L, 2),
+            this.pushHObj(new EdObj(0L, 0L, 2),
                 "\tTry   Hexeditor.jar with this   virtual file.\n" +
                 "  An applet cannot access a real  file nor the    clipboard.\n" +
                 "     The File menu,  Ctrl+X, Ctrl+C, & Ctrl+V are    therefore       inhibited.");
@@ -168,7 +168,7 @@ class binEdit extends JComponent implements MouseListener, MouseMotionListener, 
             this.randomAccessFile = new RandomAccessFile(this.file1, this.file1.canWrite() ? "rw" : "r");
             this.jSbSource = false;
             this.scrollBar.setValue(0);
-            this.undoStack.push(new edObj(0L, this.file1.length(), 0));
+            this.undoStack.push(new EdObj(0L, this.file1.length(), 0));
             this.doVirtual();
             this.focus();
         } catch (Exception e) {
@@ -1071,7 +1071,7 @@ class binEdit extends JComponent implements MouseListener, MouseMotionListener, 
                     }
 
                     if (keyCode == KeyEvent.VK_X) {
-                        this.pushHObj(new edObj(first, last - first, 8), null);
+                        this.pushHObj(new EdObj(first, last - first, 8), null);
                     }
                 }
                 break;
@@ -1194,7 +1194,7 @@ class binEdit extends JComponent implements MouseListener, MouseMotionListener, 
                 if (!hasThread && !this.isApplet) {
                     String pasted = this.fromClipboard(true);
                     if (pasted != null) {
-                        edObj eObj = new edObj(this.lastPos, pasted.length(), 4);
+                        EdObj eObj = new EdObj(this.lastPos, pasted.length(), 4);
                         this.pushHObj(eObj, pasted);
                     }
                 }
@@ -1262,7 +1262,7 @@ class binEdit extends JComponent implements MouseListener, MouseMotionListener, 
                         if (this.InsDelRadioButtons[4].isSelected()) {
                             if (!this.isApplet && pasted != null &&
                                     this.virtualSize + (long) pasted.length() < Long.MAX_VALUE) {
-                                this.pushHObj(new edObj(this.lastPos, pasted.length(), 6), pasted);
+                                this.pushHObj(new EdObj(this.lastPos, pasted.length(), 6), pasted);
                             }
                         } else {
                             String text = this.InsDelField.getText();
@@ -1284,7 +1284,7 @@ class binEdit extends JComponent implements MouseListener, MouseMotionListener, 
                             }
 
                             this.pushHObj(
-                                new edObj(
+                                new EdObj(
                                     this.lastPos,
                                     this.longInput,
                                     this.InsDelRadioButtons[0].isSelected() ? 8 : 6),
@@ -1305,7 +1305,7 @@ class binEdit extends JComponent implements MouseListener, MouseMotionListener, 
         this.focus();
     }
 
-    private void pushHObj(edObj eObj, String s) {
+    private void pushHObj(EdObj eObj, String s) {
         if (!this.undoStack.isEmpty()) {
             this.eObj = this.undoStack.lastElement();
             this.eObj.isEditing = false;
@@ -1473,7 +1473,7 @@ class binEdit extends JComponent implements MouseListener, MouseMotionListener, 
         if (!this.undoStack.empty() && this.undoStack.lastElement().isEditing) {
             this.eObj = this.undoStack.lastElement();
         } else {
-            this.eObj = new edObj(this.lastPos, 0L, 4);
+            this.eObj = new EdObj(this.lastPos, 0L, 4);
             this.undoStack.push(this.eObj);
             this.eObj.isEditing = true;
         }
@@ -1530,7 +1530,7 @@ class binEdit extends JComponent implements MouseListener, MouseMotionListener, 
             this.setGrid(this.fontSize);
 
         } else {
-            edObj eObj = this.undoStack.lastElement();
+            EdObj eObj = this.undoStack.lastElement();
             if (eObj.a1 != 6 && eObj.a1 != 8) {
                 eObj.size = !eObj.bytes.isEmpty() ? (long) eObj.bytes.size() : eObj.size;
                 eObj.p2 = eObj.p1 + eObj.size;
@@ -1547,13 +1547,13 @@ class binEdit extends JComponent implements MouseListener, MouseMotionListener, 
             }
 
             eObj = this.undoStack.firstElement();
-            this.edV.add(new edObj(0L, eObj.p2, eObj.offset, eObj));
+            this.edV.add(new EdObj(0L, eObj.p2, eObj.offset, eObj));
 
             for (int i = 1; i < this.undoStack.size(); ++i) {
                 eObj = this.undoStack.get(i);
-                edObj eObj1 =
+                EdObj eObj1 =
                     eObj.a1 == 8 ? null :
-                    new edObj(eObj.p1, eObj.p2, eObj.offset, eObj);
+                    new EdObj(eObj.p1, eObj.p2, eObj.offset, eObj);
                 long size =
                     eObj.a1 == 6 ? eObj.size :
                     eObj.a1 == 8 ? -eObj.size :
@@ -1561,7 +1561,7 @@ class binEdit extends JComponent implements MouseListener, MouseMotionListener, 
                 int edSize = this.edV.size() - 1;
                 if (eObj != null && eObj.p1 != eObj.p2) {
                     for (; 0 <= edSize; --edSize) {
-                        edObj eObj2 = this.edV.get(edSize);
+                        EdObj eObj2 = this.edV.get(edSize);
                         if (edSize == this.edV.size() - 1 && eObj2.p2 == eObj.p1) {
                             this.v1AddNoNull(edSize + 1, eObj1);
                             break;
@@ -1595,7 +1595,7 @@ class binEdit extends JComponent implements MouseListener, MouseMotionListener, 
 
                                 if (eObj.a1 == 6 || eObj.p1 > eObj2.p1 || eObj2.p1 >= eObj.p2) {
                                     if (eObj2.p1 < eObj.p1 && (eObj.p2 < eObj2.p2 || eObj.a1 == 6)) {
-                                        edObj eObj2a = this.v1Clone(eObj2);
+                                        EdObj eObj2a = this.v1Clone(eObj2);
                                         eObj2a.p2 = eObj.p1;
                                         eObj2.offset += (eObj.a1 == 6 ? eObj.p1 : eObj.p2) - eObj2.p1;
                                         eObj2.p1 = eObj.a1 == 8 ? eObj.p1 : eObj.p2;
@@ -1635,7 +1635,7 @@ class binEdit extends JComponent implements MouseListener, MouseMotionListener, 
         this.timer.restart();
     }
 
-    protected void v1AddNoNull(int index, edObj eObj) {
+    protected void v1AddNoNull(int index, EdObj eObj) {
         if (eObj != null
                 && 0 <= index
                 && index <= this.edV.size()
@@ -1644,9 +1644,9 @@ class binEdit extends JComponent implements MouseListener, MouseMotionListener, 
         }
     }
 
-    protected edObj v1Clone(edObj eObj) {
+    protected EdObj v1Clone(EdObj eObj) {
         if (eObj != null && eObj.p1 != eObj.p2) {
-            return new edObj(eObj.p1, eObj.p2, eObj.offset, eObj.o);
+            return new EdObj(eObj.p1, eObj.p2, eObj.offset, eObj.o);
         } else {
             return null;
         }
@@ -1657,7 +1657,7 @@ class binEdit extends JComponent implements MouseListener, MouseMotionListener, 
         int i = 0;
         int var10 = 0;
         long first1 = first;
-        edObj eObj = null;
+        EdObj eObj = null;
 
         Vector<byte[]> byteV;
         for (byteV = new Vector<>(); i < this.edV.size(); ++i) {
@@ -1745,7 +1745,7 @@ class binEdit extends JComponent implements MouseListener, MouseMotionListener, 
         jfc.setDialogType(JFileChooser.SAVE_DIALOG);
         jfc.setMultiSelectionEnabled(false);
         jfc.setDragEnabled(false);
-        jfc.setFileFilter(new filterRW());
+        jfc.setFileFilter(new FileFilterRW());
 
         if (this.file1 != null && this.file1.canWrite()) {
             jfc.setSelectedFile(this.file1);
@@ -1765,7 +1765,7 @@ class binEdit extends JComponent implements MouseListener, MouseMotionListener, 
             this.saveThread.interrupt();
         }
 
-        this.saveThread = new saveT();
+        this.saveThread = new SaveThread();
         this.saveThread.setDaemon(true);
         this.saveThread.file1 = this.file1;
         this.saveThread.file2 = jfc.getSelectedFile();
@@ -1790,7 +1790,7 @@ class binEdit extends JComponent implements MouseListener, MouseMotionListener, 
             }
 
             this.undoStack.clear();
-            this.undoStack.push(new edObj(0L, this.file1.length(), 0));
+            this.undoStack.push(new EdObj(0L, this.file1.length(), 0));
             this.doVirtual();
         }
 
@@ -1811,7 +1811,7 @@ class binEdit extends JComponent implements MouseListener, MouseMotionListener, 
             this.findThread.interrupt();
         }
 
-        this.findThread = new findT();
+        this.findThread = new FindThread();
         this.findThread.setDaemon(true);
         this.findThread.file1 = this.file1;
         this.findThread.edV = this.edV;

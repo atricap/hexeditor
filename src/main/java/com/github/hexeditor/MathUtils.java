@@ -1,6 +1,6 @@
 package com.github.hexeditor;
 
-class math {
+class MathUtils {
 
     public static double nextUp(double a) {
         if (Double.isNaN(a) || a == Double.POSITIVE_INFINITY) {

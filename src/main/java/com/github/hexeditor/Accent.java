@@ -1,6 +1,6 @@
 package com.github.hexeditor;
 
-class accent {
+class Accent {
 
     public static final String[] s =
             new String[] {

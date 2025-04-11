@@ -7,11 +7,11 @@ import javax.swing.event.HyperlinkEvent;
 import javax.swing.event.HyperlinkEvent.EventType;
 import javax.swing.event.HyperlinkListener;
 
-class jEP extends JScrollPane implements HyperlinkListener {
+class HelpEditorPane extends JScrollPane implements HyperlinkListener {
 
     JEditorPane editor = new JEditorPane();
 
-    public jEP(String text, boolean editable) {
+    public HelpEditorPane(String text, boolean editable) {
         super(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS,
             ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         this.editor.addHyperlinkListener(this);
